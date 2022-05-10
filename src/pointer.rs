@@ -44,7 +44,11 @@ impl<C: GenIndexConfig> CompressedGenIndex<C> {
             gen = (value & Self::GEN_MASK) >> Self::PTR_BITS;
 
             let max_generation = (1 << Self::GEN_BITS) - 1;
-            debug_assert!(Self::GEN_BITS == 0 || gen != max_generation, "Generational index will overflow (max generation: {})", max_generation);
+            debug_assert!(
+                Self::GEN_BITS == 0 || gen != max_generation,
+                "Generational index will overflow (max generation: {})",
+                max_generation
+            );
 
             Some(gen.wrapping_add(1).wrapping_shl(Self::PTR_BITS) | offset_ptr)
         });
@@ -67,7 +71,10 @@ impl<C: GenIndexConfig> CompressedGenIndex<C> {
         let (gen1, ref_table) = Self::split_gen_address(self.ptr, offset);
         let (gen2, data) = Self::split_gen_address(*ref_table, offset);
 
-        if gen1 == gen2 { Some(data) } else { None }
+        if gen1 == gen2 {
+            Some(data)
+        } else {
+            None
+        }
     }
 }
-

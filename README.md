@@ -2,6 +2,8 @@
 A trait based `Rust` API for a generic garbage collector. This project currently exists to formulate what such
 an API might look like while supporting a wide range of garbage collector types/implementations.
 
+**This crate is still underdevelopment. Any feedback or pull requests would be appreciated.**
+
 ## The Safety Issue
 How can some pointer `Gc<T>` to an element within the heap be used safely? The problem has two parts:
 - Ensure `Gc<T>` either does not outlive or is not used beyond heap lifetime

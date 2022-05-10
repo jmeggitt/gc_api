@@ -1,6 +1,5 @@
 use lock_api::RawMutex;
 
-
 /// A mark type which is used to determine if a type is in use.
 ///
 /// > **Notes:** There seem to be two primary types of object mark depending on implementation.
@@ -28,4 +27,3 @@ pub trait Mark {
 /// `Gc<T>` to provide interior mutability without requiring all object be wrapped in an explicit
 /// mutex.
 pub trait LockingMark: Mark + RawMutex {}
-
