@@ -2,12 +2,13 @@
 //! collector.
 use crate::allocator::Alloc;
 use std::mem::MaybeUninit;
-use std::ops::Deref;
+use crate::access::{Access, AccessWithAllocator};
 
 pub mod allocator;
 pub mod mark;
 pub mod pointer;
 pub mod trace;
+pub mod access;
 
 /// An owned handle into a garbage collected heap. The heap should outlive
 pub trait Heap {
@@ -50,23 +51,25 @@ pub struct Gc<T: ?Sized, H: Alloc<T>> {
 }
 
 impl<T: ?Sized, H: Alloc<T>> Gc<T, H> {
+
     /// Attempts to retrieve an item, but may fail if the item no longer exists. While it can
-    /// be helpful as a non-panicking alternative to [`Gc::with`], it does not provide any extra
+    /// be helpful as a non-panicking alternative to [`Gc::get_with`], it does not provide any extra
     /// guarantees. This function may produce false positives since not all implementations can
     /// verify the lifetime of an item.
-    pub fn try_with<'a>(&'a self, allocator: &'a H) -> Option<&'a T> {
-        allocator.try_allocator_deref(&self.handle)
+    pub fn get<'a: 'b, 'b>(&'a self) -> H::Target
+        where H: Access<'a, 'b, T> {
+        H::access(&self.handle)
     }
 
-    /// Guard is not necessary since immutable reference to allocator prevents garbage collection
-    pub fn with<'a>(&'a self, allocator: &'a H) -> &'a T {
-        self.try_with(allocator)
-            .expect("Attempted to deref a GC pointer which has already been dropped")
+    /// Use an allocator to access data held within a handle.
+    pub fn get_with<'a: 'b, 'b>(&'a self, allocator: &'a H) -> H::Target
+        where H: AccessWithAllocator<'a, 'b, T> {
+        allocator.access_with(&self.handle)
     }
 
     /// Converts a `Gc<T>` into the underlying raw handle type.
-    pub fn into_raw(this: Self) -> <H as Alloc<T>>::RawHandle {
-        this.handle
+    pub fn into_raw(self) -> <H as Alloc<T>>::RawHandle {
+        self.handle
     }
 
     /// Reconstructs a Gc<T> from a raw handle type.
@@ -76,15 +79,6 @@ impl<T: ?Sized, H: Alloc<T>> Gc<T, H> {
     /// or by an underlying garbage collector implementation to create a new `Gc<T>`.
     pub unsafe fn from_raw(raw: <H as Alloc<T>>::RawHandle) -> Self {
         Gc { handle: raw }
-    }
-}
-
-impl<T: ?Sized, H: Alloc<T>> Deref for Gc<T, H> {
-    type Target = T;
-
-    fn deref(&self) -> &Self::Target {
-        H::try_deref(&self.handle)
-            .expect("Attempted to deref a GC pointer which has already been dropped")
     }
 }
 
@@ -107,6 +101,9 @@ impl<T, H: Alloc<MaybeUninit<T>>> Gc<MaybeUninit<T>, H> {
     ///
     /// FIXME: This approach may not be sufficient since GCs may store metadata about the type which
     /// requires updating. (Ex: drop function for data type)
+    ///
+    /// # Safety
+    /// All fields must be initialized before being called.
     pub unsafe fn assume_init(self) -> Gc<T, H>
     where
         H: Alloc<T, RawHandle = <H as Alloc<MaybeUninit<T>>>::RawHandle>,
@@ -123,6 +120,9 @@ impl<T, H: Alloc<[MaybeUninit<T>]>> Gc<[MaybeUninit<T>], H> {
     ///
     /// FIXME: This approach may not be sufficient since GCs may store metadata about the type which
     /// requires updating. (Ex: drop function for data type)
+    ///
+    /// # Safety
+    /// All fields must be initialized before being called.
     pub unsafe fn assume_init(self) -> Gc<[T], H>
     where
         H: Alloc<[T], RawHandle = <H as Alloc<[MaybeUninit<T>]>>::RawHandle>,

@@ -31,20 +31,10 @@ pub trait Allocator {
 /// A marker trait which can be used to indicate a type can be allocated by an allocator.
 pub trait Alloc<T: ?Sized>: Sized {
     type RawHandle: Sized;
-
-    fn try_deref(_handle: &Self::RawHandle) -> Option<&T> {
-        unimplemented!(
-            "This handle does not support direct usage. Use Alloc::try_allocator_deref instead."
-        )
-    }
-
-    fn try_allocator_deref<'a>(&'a self, handle: &'a Self::RawHandle) -> Option<&'a T> {
-        Self::try_deref(handle)
-    }
 }
 
-pub trait ObjectMark<T: ?Sized>: Alloc<T> {
-    type MarkType: Sized;
-
-    unsafe fn mark(handle: &Self::RawHandle) -> &Self::MarkType;
-}
+// pub trait ObjectMark<T: ?Sized>: Alloc<T> {
+//     type MarkType: Sized;
+//
+//     unsafe fn mark(handle: &Self::RawHandle) -> &Self::MarkType;
+// }
