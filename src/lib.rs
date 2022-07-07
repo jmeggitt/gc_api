@@ -1,14 +1,15 @@
 //! A collection of traits and structures to help define the semantics of a multithreading garbage
 //! collector.
+use crate::access::{Access, AccessWithAllocator};
 use crate::allocator::Alloc;
 use std::mem::MaybeUninit;
-use crate::access::{Access, AccessWithAllocator};
 
+pub mod access;
 pub mod allocator;
+pub mod error;
 pub mod mark;
 pub mod pointer;
 pub mod trace;
-pub mod access;
 
 /// An owned handle into a garbage collected heap. The heap should outlive
 pub trait Heap {
@@ -51,19 +52,22 @@ pub struct Gc<T: ?Sized, H: Alloc<T>> {
 }
 
 impl<T: ?Sized, H: Alloc<T>> Gc<T, H> {
-
     /// Attempts to retrieve an item, but may fail if the item no longer exists. While it can
     /// be helpful as a non-panicking alternative to [`Gc::get_with`], it does not provide any extra
     /// guarantees. This function may produce false positives since not all implementations can
     /// verify the lifetime of an item.
     pub fn get<'a: 'b, 'b>(&'a self) -> H::Target
-        where H: Access<'a, 'b, T> {
+    where
+        H: Access<'a, 'b, T>,
+    {
         H::access(&self.handle)
     }
 
     /// Use an allocator to access data held within a handle.
     pub fn get_with<'a: 'b, 'b>(&'a self, allocator: &'a H) -> H::Target
-        where H: AccessWithAllocator<'a, 'b, T> {
+    where
+        H: AccessWithAllocator<'a, 'b, T>,
+    {
         allocator.access_with(&self.handle)
     }
 
