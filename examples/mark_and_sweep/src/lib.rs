@@ -1,99 +1,51 @@
+use std::cell::RefCell;
+use std::rc::Rc;
+use gc_api::allocator::Alloc;
+use gc_api::Heap;
+use gc_api::error::Error;
+use crate::inner::MarkSweepImpl;
+use std::alloc::Layout;
+use gc_api::marker::BlindTransmute;
+
 mod ptr_arena;
+mod inner;
 
-use std::alloc::{GlobalAlloc, Layout, System};
-use std::cell::Cell;
-use std::mem::size_of;
-use gc_api::error::{Error, ErrorKind};
-use gc_api::mark::Mark;
-use crate::ptr_arena::PtrArena;
-
-pub struct MarkSweepImpl {
-    start: *mut u8,
-    end: *mut u8,
-    cursor: *mut u8,
-    ref_table: PtrArena,
+#[derive(Clone)]
+pub struct MarkSweepGC {
+    heap: Rc<RefCell<MarkSweepImpl>>,
 }
 
-impl MarkSweepImpl {
+impl MarkSweepGC {
+    /// Create a new mark and sweep GC with the given heap size.
     pub fn with_capacity(len: usize) -> Self {
-        let layout = Layout::from_size_align(len, 4096).unwrap();
-        let start = unsafe { System.alloc(layout) };
+        let inner = MarkSweepImpl::with_capacity(len);
 
-        MarkSweepImpl {
-            start,
-            end: (start as usize + len) as *mut u8,
-            cursor: start,
-            ref_table: PtrArena::new(),
-        }
-    }
-
-    pub fn alloc(&mut self, layout: Layout) -> Result<*mut u8, Error> {
-        const FIXED_ALIGN: usize = 8;
-        const MARK_WORD_SPACE: usize = FIXED_ALIGN.max(size_of::<MarkWord>());
-
-        let layout = layout.align_to(FIXED_ALIGN).unwrap().pad_to_align();
-        if layout.align() > FIXED_ALIGN {
-            return Err(Error::from(ErrorKind::UnsupportedAlignment))
-        }
-
-        let len = layout.size().min(FIXED_ALIGN) + MARK_WORD_SPACE;
-        if (self.end as usize - self.cursor as usize) < len {
-            return Err(Error::from(ErrorKind::OutOfMemory))
-        }
-
-        let new_ptr = (self.cursor as usize + MARK_WORD_SPACE) as *mut u8;
-        self.cursor = (self.cursor as usize + len) as *mut u8;
-
-        let mark_ptr = (new_ptr as usize - size_of::<MarkWord>()) as *mut MarkWord;
-        unsafe { *mark_ptr = MarkWord::for_len(len); }
-
-        Ok(new_ptr)
+        MarkSweepGC { heap: Rc::new(RefCell::new(inner)) }
     }
 }
 
-impl Drop for MarkSweepImpl {
-    fn drop(&mut self) {
-        let len = self.end as usize - self.start as usize;
-        let layout = Layout::from_size_align(len, 4096).unwrap();
+impl Heap for MarkSweepGC {
+    type Handle = Self;
+    type Allocator = Self;
 
-        unsafe {
-            System.dealloc(self.start, layout);
-        }
+    fn create_allocator(&self) -> Self::Allocator {
+        self.clone()
+    }
+
+    fn handle(&self) -> Self::Handle {
+        self.clone()
     }
 }
 
-#[derive(Copy, Clone)]
-#[repr(transparent)]
-struct MarkWord {
-    mark: Cell<usize>,
-}
+impl<T> Alloc<T> for MarkSweepGC {
+    type MutAlternative = std::sync::Mutex<T>;
+    type RawHandle = *mut u8;
 
-impl MarkWord {
-    const MARK_BIT: usize = 0x1;
+    type Flags = Self;
 
-    fn for_len(len: usize) -> Self {
-        MarkWord { mark: Cell::new(len) }
-    }
-
-    fn object_len(&self) -> usize {
-        self.mark.get() & !Self::MARK_BIT
+    unsafe fn try_alloc(&mut self, layout: Layout) -> Result<Self::RawHandle, Error> {
+        self.heap.borrow_mut().alloc(layout)
     }
 }
 
-impl Mark for MarkWord {
-    fn load_mark_state(&self) -> bool {
-        self.mark.get() & Self::MARK_BIT != 0
-    }
-
-    fn store_mark_state(&self, state: bool) {
-        if state {
-            self.mark.set(self.object_len() | Self::MARK_BIT);
-        } else {
-            self.mark.set(self.object_len());
-        }
-    }
-}
-
-
-
-
+impl BlindTransmute for MarkSweepGC {}
