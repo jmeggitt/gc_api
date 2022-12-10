@@ -1,6 +1,7 @@
+use crate::alloc::access::Access;
+use crate::alloc::marker::BlindTransmute;
 use crate::error::{Error, ErrorKind};
-use crate::marker::BlindTransmute;
-use crate::{Access, Gc, GcMut, RootSource};
+use crate::{Gc, GcMut, RootSource};
 use std::alloc::Layout;
 
 /// An allocator which can be used as a handle to mutate the heap.

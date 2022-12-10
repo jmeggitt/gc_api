@@ -1,16 +1,14 @@
 //! A collection of traits and structures to help define the semantics of a multithreading garbage
 //! collector.
-use crate::access::Access;
-use crate::allocator::Alloc;
+use crate::alloc::access::Access;
+use crate::alloc::Alloc;
 use crate::error::Error;
-use std::mem::MaybeUninit;
 use crate::trace::Trace;
+use std::mem::MaybeUninit;
 
-pub mod access;
-pub mod allocator;
+pub mod alloc;
 pub mod error;
 pub mod mark;
-pub mod marker;
 pub mod trace;
 
 /// An owned handle into a garbage collected heap. The heap should outlive
@@ -163,7 +161,9 @@ impl<T: ?Sized, H: Alloc<T> + Alloc<<H as Alloc<T>>::MutAlternative>> GcMut<T, H
 
 impl<T: ?Sized, H: Alloc<T>> Gc<T, H> {
     pub fn upgrade<R>(self) -> GcMut<R, H>
-    where H: Alloc<R, MutAlternative=T> {
+    where
+        H: Alloc<R, MutAlternative = T>,
+    {
         GcMut {
             handle: self.handle,
         }
@@ -176,10 +176,12 @@ pub trait RootSource<A: ?Sized>: Trace<A> {
     type Index;
 
     fn add_root<T>(&mut self, root: &Gc<T, A>) -> Self::Index
-        where A: Alloc<T>;
+    where
+        A: Alloc<T>;
 
     fn remove_root<T>(&mut self, root: &Gc<T, A>) -> bool
-        where A: Alloc<T>;
+    where
+        A: Alloc<T>;
 
     fn remove_by_index(&mut self, index: Self::Index) -> bool;
 }
