@@ -1,13 +1,16 @@
 //! A collection of traits and structures to help define the semantics of a multithreading garbage
 //! collector.
-use crate::access::{Access, AccessWithAllocator};
+use crate::access::Access;
 use crate::allocator::Alloc;
+use crate::error::Error;
 use std::mem::MaybeUninit;
+use crate::trace::Trace;
 
 pub mod access;
 pub mod allocator;
 pub mod error;
 pub mod mark;
+pub mod marker;
 pub mod pointer;
 pub mod trace;
 
@@ -52,23 +55,32 @@ pub struct Gc<T: ?Sized, H: Alloc<T>> {
 }
 
 impl<T: ?Sized, H: Alloc<T>> Gc<T, H> {
-    /// Attempts to retrieve an item, but may fail if the item no longer exists. While it can
-    /// be helpful as a non-panicking alternative to [`Gc::get_with`], it does not provide any extra
-    /// guarantees. This function may produce false positives since not all implementations can
-    /// verify the lifetime of an item.
-    pub fn get<'a: 'b, 'b>(&'a self) -> H::Target
-    where
-        H: Access<'a, 'b, T>,
-    {
-        H::access(&self.handle)
-    }
+    // /// Attempts to retrieve an item, but may fail if the item no longer exists. While it can
+    // /// be helpful as a non-panicking alternative to [`Gc::get_with`], it does not provide any extra
+    // /// guarantees. This function may produce false positives since not all implementations can
+    // /// verify the lifetime of an item.
+    // pub fn get<'a: 'b, 'b>(&'a self) -> H::Target
+    // where
+    //     H: Access<'a, 'b, T>,
+    // {
+    //     unsafe {
+    //         H::access(&self.handle)
+    //     }
+    // }
 
     /// Use an allocator to access data held within a handle.
-    pub fn get_with<'a: 'b, 'b>(&'a self, allocator: &'a H) -> H::Target
+    pub fn get(&self, allocator: &H) -> <H as Access<T>>::Guard
     where
-        H: AccessWithAllocator<'a, 'b, T>,
+        H: Access<T>,
     {
-        allocator.access_with(&self.handle)
+        self.try_get(allocator).unwrap()
+    }
+
+    pub fn try_get(&self, allocator: &H) -> Result<<H as Access<T>>::Guard, Error>
+    where
+        H: Access<T>,
+    {
+        unsafe { allocator.access(&self.handle) }
     }
 
     /// Converts a `Gc<T>` into the underlying raw handle type.
@@ -137,16 +149,38 @@ impl<T, H: Alloc<[MaybeUninit<T>]>> Gc<[MaybeUninit<T>], H> {
     }
 }
 
+#[repr(transparent)]
+pub struct GcMut<T: ?Sized, H: Alloc<T> + Alloc<<H as Alloc<T>>::MutAlternative>> {
+    handle: <H as Alloc<<H as Alloc<T>>::MutAlternative>>::RawHandle,
+}
+
+impl<T: ?Sized, H: Alloc<T> + Alloc<<H as Alloc<T>>::MutAlternative>> GcMut<T, H> {
+    pub fn downgrade(self) -> Gc<<H as Alloc<T>>::MutAlternative, H> {
+        Gc {
+            handle: self.handle,
+        }
+    }
+}
+
+impl<T: ?Sized, H: Alloc<T>> Gc<T, H> {
+    pub fn upgrade<R>(self) -> GcMut<R, H>
+    where H: Alloc<R, MutAlternative=T> {
+        GcMut {
+            handle: self.handle,
+        }
+    }
+}
+
 /// A source for gc roots which can be iterated over. Root sources are assumed to be unordered and
 /// may contain duplicate values.
-pub trait RootSource<T> {
-    type RootIter: IntoIterator<Item = T>;
+pub trait RootSource<A: ?Sized>: Trace<A> {
     type Index;
 
-    fn add_root(&mut self, root: T) -> Self::Index;
+    fn add_root<T>(&mut self, root: &Gc<T, A>) -> Self::Index
+        where A: Alloc<T>;
 
-    fn remove_by_index(&mut self, index: Self::Index) -> Option<T>;
-    fn remove_root(&mut self, root: T) -> Option<T>;
+    fn remove_root<T>(&mut self, root: &Gc<T, A>) -> bool
+        where A: Alloc<T>;
 
-    fn iter_roots(&self) -> Self::RootIter;
+    fn remove_by_index(&mut self, index: Self::Index) -> bool;
 }

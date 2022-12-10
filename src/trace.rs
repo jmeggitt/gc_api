@@ -114,7 +114,6 @@ mod impls {
         fn trace<T: Tracer<A>>(&self, _: &mut T) {}
     }
 
-
     /// This is a wierd one. Is tracing or not-tracing more in the spirit of manually drop? At the
     /// moment I am leaving it as a black box that does not propogate anything related to dropping
     /// or freeing a resource.
@@ -228,7 +227,6 @@ mod impls {
             Trace::trace_slice(&self[..], tracer)
         }
     }
-
 
     // TODO: Should I implement Trace for all `std::collections`? I am tempted to implement it over
     // `IntoIter`, but that may lead to issues.

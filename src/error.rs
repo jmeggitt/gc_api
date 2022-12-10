@@ -4,7 +4,7 @@
 use std::error;
 use std::fmt::{self, Debug, Display, Formatter};
 
-#[derive(Debug, Copy, Clone)]
+#[derive(Debug, Copy, Clone, Eq, PartialEq)]
 pub enum ErrorKind {
     /// This error indicates that there is no longer enough memory to fill an allocation request.
     OutOfMemory,
@@ -21,6 +21,10 @@ pub enum ErrorKind {
     /// This error indicates that an invalid state has been reached by the GC. This may be the
     /// result of unsafe code or be produced by a GC which requires strict usage requirements.
     IllegalState,
+    /// This error occurs when attempting to access an object that has already been garbage
+    /// collected. It should not be assumed that this error will be returned as not many garbage
+    /// collectors attempt to detect when this occurs.
+    UseAfterFree,
     /// Any error which is not covered by another error kind.
     Other,
 }
@@ -39,6 +43,9 @@ impl Display for ErrorKind {
                 f,
                 "Attempted to enter an invalid state to complete this request"
             ),
+            ErrorKind::UseAfterFree => {
+                write!(f, "Attempted to access an object which has been freed")
+            }
             ErrorKind::Other => write!(
                 f,
                 "An unknown error occurred while attempting to complete the request"
@@ -61,6 +68,10 @@ impl Error {
             kind,
             error: error.into(),
         }
+    }
+
+    pub fn kind(&self) -> ErrorKind {
+        self.kind
     }
 }
 
