@@ -11,7 +11,6 @@ pub mod allocator;
 pub mod error;
 pub mod mark;
 pub mod marker;
-pub mod pointer;
 pub mod trace;
 
 /// An owned handle into a garbage collected heap. The heap should outlive
