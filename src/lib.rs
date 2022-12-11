@@ -1,7 +1,7 @@
 //! A collection of traits and structures to help define the semantics of a multithreading garbage
 //! collector.
 use crate::alloc::access::{AccessedVia, Accessor};
-use crate::alloc::Alloc;
+use crate::alloc::{Alloc, AllocMut};
 use crate::error::Error;
 use crate::trace::Trace;
 use std::mem::MaybeUninit;
@@ -156,11 +156,11 @@ impl<T, H: Alloc<[MaybeUninit<T>]>> Gc<[MaybeUninit<T>], H> {
 }
 
 #[repr(transparent)]
-pub struct GcMut<T: ?Sized, H: Alloc<T> + Alloc<<H as Alloc<T>>::MutAlternative>> {
+pub struct GcMut<T: ?Sized, H: AllocMut<T>> {
     handle: <H as Alloc<<H as Alloc<T>>::MutAlternative>>::RawHandle,
 }
 
-impl<T: ?Sized, H: Alloc<T> + Alloc<<H as Alloc<T>>::MutAlternative>> GcMut<T, H> {
+impl<T: ?Sized, H: AllocMut<T>> GcMut<T, H> {
     pub fn downgrade(self) -> Gc<<H as Alloc<T>>::MutAlternative, H> {
         Gc {
             handle: self.handle,

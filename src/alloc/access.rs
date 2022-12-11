@@ -48,6 +48,10 @@ where
         unsafe { self.access(&object.handle) }
     }
 
+    /// Creates a guard which can be used to read the data associated with this handle.
+    ///
+    /// # Safety
+    /// The handle must corespond to a valid GC object in the heap used by this accessor.
     unsafe fn access<'g>(
         &'g self,
         handle: &'g <A as Alloc<T>>::RawHandle,
@@ -74,6 +78,10 @@ where
         unsafe { self.access_mut(&object.handle) }
     }
 
+    /// Creates a guard which can be used to read or write data associated with this handle.
+    ///
+    /// # Safety
+    /// The handle must corespond to a valid GC object in the heap used by this accessor.
     unsafe fn access_mut<'g>(
         &'g self,
         handle: &'g <A as Alloc<T>>::RawHandle,

@@ -1,4 +1,4 @@
-use crate::{Alloc, Gc, GcMut};
+use crate::{Alloc, AllocMut, Gc, GcMut};
 
 /// A simple and versatile Trace trait modeled after `std::hash::Hash`.
 pub trait Trace<A: ?Sized> {
@@ -24,7 +24,7 @@ impl<T, A: Alloc<T>> Trace<A> for Gc<T, A> {
 }
 
 /// This implementation simply switches the underying method from the tracer to consume the item.
-impl<T, A: Alloc<T> + Alloc<<A as Alloc<T>>::MutAlternative>> Trace<A> for GcMut<T, A> {
+impl<T, A: AllocMut<T>> Trace<A> for GcMut<T, A> {
     fn trace<B: Tracer<A>>(&self, tracer: &mut B) {
         tracer.trace_mut_obj(self)
     }
@@ -39,7 +39,7 @@ pub trait Tracer<A: ?Sized> {
 
     fn trace_mut_obj<T: ?Sized>(&mut self, obj: &GcMut<T, A>)
     where
-        A: Alloc<T> + Alloc<<A as Alloc<T>>::MutAlternative>;
+        A: AllocMut<T>;
 }
 
 mod impls {

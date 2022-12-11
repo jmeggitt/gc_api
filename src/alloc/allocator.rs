@@ -1,4 +1,5 @@
 use crate::alloc::marker::BlindTransmute;
+use crate::alloc::{Alloc, AllocMut};
 use crate::error::{Error, ErrorKind};
 use crate::{Gc, GcMut, RootSource};
 use std::alloc::Layout;
@@ -29,7 +30,7 @@ pub trait Allocator: RootSource<Self> {
     #[inline]
     fn alloc_mut<T>(&mut self, x: T) -> GcMut<T, Self>
     where
-        Self: Alloc<T> + Alloc<<Self as Alloc<T>>::MutAlternative>,
+        Self: AllocMut<T>,
     {
         todo!()
     }
@@ -146,16 +147,6 @@ pub enum CollectionType {
     Suggest,
     /// A custom collection request defined by a specific implementation.
     Custom(u64),
-}
-
-/// A marker trait which can be used to indicate a type can be allocated by an allocator.
-pub trait Alloc<T: ?Sized>: Allocator + Sized {
-    type MutAlternative;
-    type RawHandle: Sized;
-
-    type Flags;
-
-    unsafe fn try_alloc(&mut self, layout: Layout) -> Result<Self::RawHandle, Error>;
 }
 
 /// A placeholder type for a custom allocation.
