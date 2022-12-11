@@ -1,4 +1,3 @@
-use crate::alloc::access::Access;
 use crate::alloc::marker::BlindTransmute;
 use crate::error::{Error, ErrorKind};
 use crate::{Gc, GcMut, RootSource};
@@ -10,7 +9,7 @@ pub trait Allocator: RootSource<Self> {
     #[inline]
     fn alloc<T>(&mut self, x: T) -> Gc<T, Self>
     where
-        Self: Alloc<T> + Access<T>,
+        Self: Alloc<T>,
     {
         // unsafe {
         //     // Since we write through an immutable reference to uninitialized memory, both
@@ -30,7 +29,7 @@ pub trait Allocator: RootSource<Self> {
     #[inline]
     fn alloc_mut<T>(&mut self, x: T) -> GcMut<T, Self>
     where
-        Self: Alloc<T> + Access<T> + Alloc<<Self as Alloc<T>>::MutAlternative>,
+        Self: Alloc<T> + Alloc<<Self as Alloc<T>>::MutAlternative>,
     {
         todo!()
     }
@@ -39,7 +38,7 @@ pub trait Allocator: RootSource<Self> {
     #[inline]
     fn try_alloc<T>(&mut self, x: T) -> Result<Gc<T, Self>, Error>
     where
-        Self: Alloc<T> + Access<T>,
+        Self: Alloc<T>,
     {
         let handle = self.try_alloc_uninit()?;
 

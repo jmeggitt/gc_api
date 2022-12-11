@@ -21,35 +21,67 @@
 //!
 
 use crate::error::Error;
-use crate::Alloc;
+use crate::{Alloc, Gc};
 use std::ops::{Deref, DerefMut};
 
-/// TODO: Is there any reason why this should not be merged with Alloc<T>?
-pub trait Access<T: ?Sized>: Alloc<T> {
-    type Guard: Deref<Target = T>;
+/// Marker trait to describe known accessors of data
+pub trait AccessedVia<Accessor> {}
 
-    unsafe fn access(&self, handle: &Self::RawHandle) -> Result<Self::Guard, Error>;
-}
+pub trait Accessor<T: ?Sized, A>: Sized
+where
+    A: AccessedVia<Self> + Alloc<T>,
+{
+    // TODO: Should Deref be replaced with Borrow?
+    type Guard<'g>: Deref<Target = T>
+    where
+        Self: 'g;
 
-pub trait AccessMut<T: ?Sized>: Alloc<T> {
-    type Guard: DerefMut<Target = T>;
-
-    unsafe fn access_mut(&self, handle: &Self::RawHandle) -> Result<Self::Guard, Error>;
-}
-
-/// A Simple wrapper for an immutable reference which satisfies the requirements for guards.
-pub struct ThinGuard<'a, T>(&'a T);
-
-impl<'a, T> From<&'a T> for ThinGuard<'a, T> {
-    fn from(x: &'a T) -> Self {
-        ThinGuard(x)
+    /// Get immutable access to
+    #[inline(always)]
+    fn read<'g>(&'g self, object: &'g Gc<T, A>) -> Self::Guard<'g> {
+        self.try_read(object)
+            .unwrap_or_else(|err| failed_access(err))
     }
+
+    #[inline(always)]
+    fn try_read<'g>(&'g self, object: &'g Gc<T, A>) -> Result<Self::Guard<'g>, Error> {
+        unsafe { self.access(&object.handle) }
+    }
+
+    unsafe fn access<'g>(
+        &'g self,
+        handle: &'g <A as Alloc<T>>::RawHandle,
+    ) -> Result<Self::Guard<'g>, Error>;
 }
 
-impl<'a, T> Deref for ThinGuard<'a, T> {
-    type Target = T;
+pub trait AccessorMut<T: ?Sized, A>: Accessor<T, A>
+where
+    A: AccessedVia<Self> + Alloc<T>,
+{
+    type GuardMut<'g>: DerefMut<Target = T>
+    where
+        Self: 'g;
 
-    fn deref(&self) -> &Self::Target {
-        self.0
+    /// Get immutable access to
+    #[inline(always)]
+    fn write<'g>(&'g self, object: &'g Gc<T, A>) -> Self::GuardMut<'g> {
+        self.try_write(object)
+            .unwrap_or_else(|err| failed_access(err))
     }
+
+    #[inline(always)]
+    fn try_write<'g>(&'g self, object: &'g Gc<T, A>) -> Result<Self::GuardMut<'g>, Error> {
+        unsafe { self.access_mut(&object.handle) }
+    }
+
+    unsafe fn access_mut<'g>(
+        &'g self,
+        handle: &'g <A as Alloc<T>>::RawHandle,
+    ) -> Result<Self::GuardMut<'g>, Error>;
+}
+
+#[inline(never)]
+#[cold]
+fn failed_access(err: Error) -> ! {
+    panic!("Failed to access GC object: {:?}", err)
 }

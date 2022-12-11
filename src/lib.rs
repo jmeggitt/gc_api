@@ -1,6 +1,6 @@
 //! A collection of traits and structures to help define the semantics of a multithreading garbage
 //! collector.
-use crate::alloc::access::Access;
+use crate::alloc::access::{AccessedVia, Accessor};
 use crate::alloc::Alloc;
 use crate::error::Error;
 use crate::trace::Trace;
@@ -66,18 +66,27 @@ impl<T: ?Sized, H: Alloc<T>> Gc<T, H> {
     // }
 
     /// Use an allocator to access data held within a handle.
-    pub fn get(&self, allocator: &H) -> <H as Access<T>>::Guard
+    ///
+    /// This function is syntactic sugar for `allocator.read(self)`.
+    #[inline(always)]
+    pub fn get<'a, A>(&'a self, allocator: &'a A) -> <A as Accessor<T, H>>::Guard<'a>
     where
-        H: Access<T>,
+        H: AccessedVia<A>,
+        A: Accessor<T, H>,
     {
-        self.try_get(allocator).unwrap()
+        allocator.read(self)
     }
 
-    pub fn try_get(&self, allocator: &H) -> Result<<H as Access<T>>::Guard, Error>
+    #[inline(always)]
+    pub fn try_get<'a, A>(
+        &'a self,
+        allocator: &'a A,
+    ) -> Result<<A as Accessor<T, H>>::Guard<'a>, Error>
     where
-        H: Access<T>,
+        H: AccessedVia<A>,
+        A: Accessor<T, H>,
     {
-        unsafe { allocator.access(&self.handle) }
+        allocator.try_read(self)
     }
 
     /// Converts a `Gc<T>` into the underlying raw handle type.
