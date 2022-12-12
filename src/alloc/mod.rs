@@ -29,7 +29,6 @@ pub trait Alloc<T: ?Sized>: Sized {
     /// `Sized` and DST `T`s.
     unsafe fn try_alloc_layout(&mut self, layout: Layout) -> Result<Self::RawHandle, Error>;
 
-
     /// Retrieves a pointer to the memory on the heap for a given handle
     ///
     /// # Safety
@@ -45,7 +44,6 @@ pub trait Alloc<T: ?Sized>: Sized {
 pub trait AllocMut<T: ?Sized>: Alloc<T> + Alloc<<Self as Alloc<T>>::MutTy> {}
 
 impl<T: ?Sized, A> AllocMut<T> for A where A: Alloc<T> + Alloc<<Self as Alloc<T>>::MutTy> {}
-
 
 // /// A helper trait for transmuting a GC pointer.
 // pub trait ReinterpretHandle<T: ?Sized, R: ?Sized>: Alloc<T> + Alloc<R> {

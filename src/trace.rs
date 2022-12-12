@@ -23,13 +23,6 @@ impl<T, A: Alloc<T>> Trace<A> for Gc<T, A> {
     }
 }
 
-/// This implementation simply switches the underying method from the tracer to consume the item.
-impl<T, A: AllocMut<T>> Trace<A> for GcMut<T, A> {
-    fn trace<B: Tracer<A>>(&self, tracer: &mut B) {
-        tracer.trace_mut_obj(self)
-    }
-}
-
 /// Not sure what I want this to be, but I thought I might as well leave it as a stub to make
 /// its usage more explicit.
 pub trait Tracer<A: ?Sized> {

@@ -155,26 +155,4 @@ impl<T, H: Alloc<[MaybeUninit<T>]>> Gc<[MaybeUninit<T>], H> {
     }
 }
 
-#[repr(transparent)]
-pub struct GcMut<T: ?Sized, H: AllocMut<T>> {
-    handle: <H as Alloc<<H as Alloc<T>>::MutTy>>::RawHandle,
-}
-
-impl<T: ?Sized, H: AllocMut<T>> GcMut<T, H> {
-    pub fn downgrade(self) -> Gc<<H as Alloc<T>>::MutTy, H> {
-        Gc {
-            handle: self.handle,
-        }
-    }
-}
-
-impl<T: ?Sized, H: Alloc<T>> Gc<T, H> {
-    pub fn upgrade<R>(self) -> GcMut<R, H>
-    where
-        H: Alloc<R, MutTy= T>,
-    {
-        GcMut {
-            handle: self.handle,
-        }
-    }
-}
+pub type GcMut<T, H> = Gc<<H as Alloc<T>>::MutTy, H>;

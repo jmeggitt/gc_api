@@ -3,14 +3,11 @@ use std::fmt::Debug;
 use std::ptr;
 use std::ptr::NonNull;
 
-
 use crate::error::Error;
-use crate::{Alloc, AllocMut, Gc, GcMut};
 use crate::error::ErrorKind::OutOfMemory;
-
+use crate::{Alloc, AllocMut, Gc, GcMut};
 
 pub const DEFAULT_ALLOC_RETRY_LIMIT: Option<u32> = Some(3);
-
 
 /// Notes:
 /// - Encode metadata in Gc pointer
@@ -34,47 +31,55 @@ pub trait Allocator {
 
     #[inline(always)]
     fn alloc<T>(&mut self, val: T) -> Gc<T, Self>
-        where
-            Self: Alloc<T>,
+    where
+        Self: Alloc<T>,
     {
         self.alloc_with(|| val)
     }
 
     #[inline(always)]
     fn alloc_mut<T>(&mut self, val: T) -> GcMut<T, Self>
-        where Self: AllocMut<T>,
-              <Self as Alloc<T>>::MutTy: From<T>,
+    where
+        Self: AllocMut<T>,
+        <Self as Alloc<T>>::MutTy: From<T>,
     {
-        self.alloc_with::<_, <Self as Alloc<T>>::MutTy>(|| val.into()).upgrade()
+        self.alloc_with::<_, <Self as Alloc<T>>::MutTy>(|| val.into())
     }
 
     #[inline(always)]
     fn try_alloc<T>(&mut self, val: T) -> Result<Gc<T, Self>, Error>
-        where
-            Self: Alloc<T>,
+    where
+        Self: Alloc<T>,
     {
         self.try_alloc_with(|| val)
     }
 
     #[inline(always)]
     fn alloc_with<F, T>(&mut self, f: F) -> Gc<T, Self>
-        where
-            F: FnOnce() -> T,
-            Self: Alloc<T>,
+    where
+        F: FnOnce() -> T,
+        Self: Alloc<T>,
     {
-        self.try_gc_alloc_with(DEFAULT_ALLOC_RETRY_LIMIT, f).unwrap_or_else(|err| failed_allocation(err))
+        self.try_gc_alloc_with(DEFAULT_ALLOC_RETRY_LIMIT, f)
+            .unwrap_or_else(|err| failed_allocation(err))
     }
 
     #[inline(always)]
-    fn try_gc_alloc_with<F, T>(&mut self, retry_limit: Option<u32>, f: F) -> Result<Gc<T, Self>, Error>
-        where
-            F: FnOnce() -> T,
-            Self: Alloc<T>,
+    fn try_gc_alloc_with<F, T>(
+        &mut self,
+        retry_limit: Option<u32>,
+        f: F,
+    ) -> Result<Gc<T, Self>, Error>
+    where
+        F: FnOnce() -> T,
+        Self: Alloc<T>,
     {
         let layout = Layout::new::<T>();
 
         unsafe {
-            self.try_gc_alloc_init(retry_limit, layout, |ptr| ptr::write(ptr.as_ptr() as *mut T, f()))
+            self.try_gc_alloc_init(retry_limit, layout, |ptr| {
+                ptr::write(ptr.as_ptr() as *mut T, f())
+            })
         }
     }
 
@@ -86,13 +91,22 @@ pub trait Allocator {
     /// result in undefined behavior comparable to calling [`std::mem::MaybeUninit::assume_init`]
     /// without fully initializing the type.
     #[inline(always)]
-    unsafe fn try_gc_alloc_init<F, T>(&mut self, mut retry_limit: Option<u32>, layout: Layout, init: F) -> Result<Gc<T, Self>, Error>
-        where
-            T: ?Sized,
-            F: FnOnce(NonNull<u8>),
-            Self: Alloc<T>,
+    unsafe fn try_gc_alloc_init<F, T>(
+        &mut self,
+        mut retry_limit: Option<u32>,
+        layout: Layout,
+        init: F,
+    ) -> Result<Gc<T, Self>, Error>
+    where
+        T: ?Sized,
+        F: FnOnce(NonNull<u8>),
+        Self: Alloc<T>,
     {
-        assert!(valid_layout::<T>(layout), "Provided layout size/align is not large enough to satisfy T: {:?}", layout);
+        assert!(
+            valid_layout::<T>(layout),
+            "Provided layout size/align is not large enough to satisfy T: {:?}",
+            layout
+        );
 
         let handle = loop {
             match unsafe { Alloc::<T>::try_alloc_layout(self, layout) } {
@@ -115,7 +129,10 @@ pub trait Allocator {
 
         unsafe {
             let data_ptr = Alloc::<T>::handle_ptr(self, &handle);
-            debug_assert!(data_ptr.as_ptr() as usize & (layout.align() - 1) == 0, "GC allocation did not meet required alignment");
+            debug_assert!(
+                data_ptr.as_ptr() as usize & (layout.align() - 1) == 0,
+                "GC allocation did not meet required alignment"
+            );
 
             init(data_ptr);
             Ok(Gc::from_raw(handle))
@@ -126,11 +143,15 @@ pub trait Allocator {
     /// unsafe code the unitialized value is first initialized to its default value before being
     /// handed to the user.
     #[inline(always)]
-    fn try_gc_alloc_setup<F, T>(&mut self, retry_limit: Option<u32>, init: F) -> Result<Gc<T, Self>, Error>
-        where
-            T: ?Sized + Default,
-            F: FnOnce(&mut T),
-            Self: Alloc<T>,
+    fn try_gc_alloc_setup<F, T>(
+        &mut self,
+        retry_limit: Option<u32>,
+        init: F,
+    ) -> Result<Gc<T, Self>, Error>
+    where
+        T: ?Sized + Default,
+        F: FnOnce(&mut T),
+        Self: Alloc<T>,
     {
         let layout = Layout::new::<T>();
 
@@ -146,74 +167,82 @@ pub trait Allocator {
 
     #[inline(always)]
     fn try_alloc_with<F, T>(&mut self, f: F) -> Result<Gc<T, Self>, Error>
-        where
-            F: FnOnce() -> T,
-            Self: Alloc<T>,
+    where
+        F: FnOnce() -> T,
+        Self: Alloc<T>,
     {
         self.try_gc_alloc_with(None, f)
     }
 
     #[inline(always)]
     fn alloc_slice_copy<T>(&mut self, src: &[T]) -> Gc<[T], Self>
-        where
-            T: Copy,
-            Self: Alloc<[T]>
+    where
+        T: Copy,
+        Self: Alloc<[T]>,
     {
         let layout = Layout::new::<T>();
 
         unsafe {
             self.try_gc_alloc_init(DEFAULT_ALLOC_RETRY_LIMIT, layout, |ptr| {
                 ptr::copy_nonoverlapping(src.as_ptr(), ptr.as_ptr() as *mut T, src.len());
-            }).unwrap_or_else(|err| failed_allocation(err))
+            })
+            .unwrap_or_else(|err| failed_allocation(err))
         }
     }
 
     #[inline(always)]
     fn alloc_slice_clone<T>(&mut self, src: &[T]) -> Gc<[T], Self>
-        where
-            T: Clone,
-            Self: Alloc<[T]>
+    where
+        T: Clone,
+        Self: Alloc<[T]>,
     {
         self.alloc_slice_fill_with(src.len(), |index| src[index].clone())
     }
 
     #[inline(always)]
     fn alloc_str(&mut self, src: &str) -> Gc<str, Self>
-        where
-            Self: Alloc<str>
+    where
+        Self: Alloc<str>,
     {
         let layout = Layout::for_value(src.as_bytes());
 
         unsafe {
             self.try_gc_alloc_init(DEFAULT_ALLOC_RETRY_LIMIT, layout, |ptr| {
                 ptr::copy_nonoverlapping(src.as_ptr(), ptr.as_ptr(), src.len());
-            }).unwrap_or_else(|err| failed_allocation(err))
+            })
+            .unwrap_or_else(|err| failed_allocation(err))
         }
     }
 
     #[inline(always)]
     fn alloc_slice_fill_with<T, F>(&mut self, len: usize, f: F) -> Gc<[T], Self>
-        where
-            F: FnMut(usize) -> T,
-            Self: Alloc<[T]>
+    where
+        F: FnMut(usize) -> T,
+        Self: Alloc<[T]>,
     {
-        self.try_alloc_slice_fill_with(len, f).unwrap_or_else(|err| failed_allocation(err))
+        self.try_alloc_slice_fill_with(len, f)
+            .unwrap_or_else(|err| failed_allocation(err))
     }
 
     #[inline(always)]
     fn try_alloc_slice_fill_with<T, F>(&mut self, len: usize, f: F) -> Result<Gc<[T], Self>, Error>
-        where
-            F: FnMut(usize) -> T,
-            Self: Alloc<[T]>
+    where
+        F: FnMut(usize) -> T,
+        Self: Alloc<[T]>,
     {
         self.try_gc_alloc_slice_fill_with(Some(0), len, f)
     }
 
     #[inline(always)]
-    fn try_gc_alloc_slice_fill_with<T, F>(&mut self, retry_limit: Option<u32>, len: usize, mut f: F) -> Result<Gc<[T], Self>, Error>
-        where
-            F: FnMut(usize) -> T,
-            Self: Alloc<[T]>
+    fn try_gc_alloc_slice_fill_with<T, F>(
+        &mut self,
+        retry_limit: Option<u32>,
+        len: usize,
+        mut f: F,
+    ) -> Result<Gc<[T], Self>, Error>
+    where
+        F: FnMut(usize) -> T,
+        Self: Alloc<[T]>,
     {
         let layout = Layout::array::<T>(len).unwrap_or_else(|err| failed_allocation(err));
 
@@ -228,28 +257,28 @@ pub trait Allocator {
 
     #[inline(always)]
     fn alloc_slice_fill_copy<T>(&mut self, len: usize, value: T) -> Gc<[T], Self>
-        where
-            T: Copy,
-            Self: Alloc<[T]>
+    where
+        T: Copy,
+        Self: Alloc<[T]>,
     {
         self.alloc_slice_fill_with(len, |_| value)
     }
 
     #[inline(always)]
     fn alloc_slice_fill_clone<T>(&mut self, len: usize, value: &T) -> Gc<[T], Self>
-        where
-            T: Clone,
-            Self: Alloc<[T]>
+    where
+        T: Clone,
+        Self: Alloc<[T]>,
     {
         self.alloc_slice_fill_with(len, |_| value.clone())
     }
 
     #[inline(always)]
     fn alloc_slice_fill_iter<T, I>(&mut self, iter: I) -> Gc<[T], Self>
-        where
-            I: IntoIterator<Item=T>,
-            I::IntoIter: ExactSizeIterator,
-            Self: Alloc<[T]>
+    where
+        I: IntoIterator<Item = T>,
+        I::IntoIter: ExactSizeIterator,
+        Self: Alloc<[T]>,
     {
         let mut iter = iter.into_iter();
 
@@ -260,14 +289,13 @@ pub trait Allocator {
 
     #[inline(always)]
     fn alloc_slice_fill_default<T>(&mut self, len: usize) -> Gc<[T], Self>
-        where
-            T: Default,
-            Self: Alloc<[T]>
+    where
+        T: Default,
+        Self: Alloc<[T]>,
     {
         self.alloc_slice_fill_with(len, |_| T::default())
     }
 }
-
 
 pub enum CollectionType {
     /// Request that a full GC is performed across the entire heap as soon as possible
@@ -286,7 +314,6 @@ pub enum CollectionType {
     /// A custom collection request defined by a specific implementation.
     Custom(u64),
 }
-
 
 /// A helper function that checks that a layout meets minimum size constraints
 #[inline(always)]
@@ -312,7 +339,6 @@ fn valid_layout<T: ?Sized>(layout: Layout) -> bool {
         _ => true,
     }
 }
-
 
 #[cold]
 #[inline(never)]
