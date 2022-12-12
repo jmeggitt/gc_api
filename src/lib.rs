@@ -3,12 +3,12 @@
 use crate::alloc::access::{AccessedVia, Accessor};
 use crate::alloc::{Alloc, AllocMut};
 use crate::error::Error;
-use crate::trace::Trace;
 use std::mem::MaybeUninit;
 
 pub mod alloc;
 pub mod error;
 pub mod mark;
+pub mod root;
 pub mod trace;
 
 /// An owned handle into a garbage collected heap. The heap should outlive
@@ -157,11 +157,11 @@ impl<T, H: Alloc<[MaybeUninit<T>]>> Gc<[MaybeUninit<T>], H> {
 
 #[repr(transparent)]
 pub struct GcMut<T: ?Sized, H: AllocMut<T>> {
-    handle: <H as Alloc<<H as Alloc<T>>::MutAlternative>>::RawHandle,
+    handle: <H as Alloc<<H as Alloc<T>>::MutTy>>::RawHandle,
 }
 
 impl<T: ?Sized, H: AllocMut<T>> GcMut<T, H> {
-    pub fn downgrade(self) -> Gc<<H as Alloc<T>>::MutAlternative, H> {
+    pub fn downgrade(self) -> Gc<<H as Alloc<T>>::MutTy, H> {
         Gc {
             handle: self.handle,
         }
@@ -171,26 +171,10 @@ impl<T: ?Sized, H: AllocMut<T>> GcMut<T, H> {
 impl<T: ?Sized, H: Alloc<T>> Gc<T, H> {
     pub fn upgrade<R>(self) -> GcMut<R, H>
     where
-        H: Alloc<R, MutAlternative = T>,
+        H: Alloc<R, MutTy= T>,
     {
         GcMut {
             handle: self.handle,
         }
     }
-}
-
-/// A source for gc roots which can be iterated over. Root sources are assumed to be unordered and
-/// may contain duplicate values.
-pub trait RootSource<A: ?Sized>: Trace<A> {
-    type Index;
-
-    fn add_root<T>(&mut self, root: &Gc<T, A>) -> Self::Index
-    where
-        A: Alloc<T>;
-
-    fn remove_root<T>(&mut self, root: &Gc<T, A>) -> bool
-    where
-        A: Alloc<T>;
-
-    fn remove_by_index(&mut self, index: Self::Index) -> bool;
 }

@@ -48,6 +48,11 @@ where
         unsafe { self.access(&object.handle) }
     }
 
+    /// Check if an object is alive. Not all garbage collectors will support performing this check.
+    fn is_alive(&self, _object: &Gc<T, A>) -> Option<bool> {
+        None
+    }
+
     /// Creates a guard which can be used to read the data associated with this handle.
     ///
     /// # Safety
