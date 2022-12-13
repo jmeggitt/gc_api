@@ -102,12 +102,6 @@ pub trait Allocator {
         F: FnOnce(NonNull<u8>),
         Self: Alloc<T>,
     {
-        assert!(
-            valid_layout::<T>(layout),
-            "Provided layout size/align is not large enough to satisfy T: {:?}",
-            layout
-        );
-
         let handle = loop {
             match unsafe { Alloc::<T>::try_alloc_layout(self, layout) } {
                 Ok(handle) => break handle,
@@ -315,30 +309,6 @@ pub enum CollectionType {
     Custom(u64),
 }
 
-/// A helper function that checks that a layout meets minimum size constraints
-#[inline(always)]
-#[allow(dead_code)]
-fn valid_layout<T: ?Sized>(layout: Layout) -> bool {
-    trait NotSized {
-        const LAYOUT: Option<Layout> = None;
-    }
-
-    impl<A: ?Sized> NotSized for A {}
-
-    struct Wrapper<A: ?Sized>(std::marker::PhantomData<A>);
-    impl<A: Sized> Wrapper<A> {
-        const LAYOUT: Option<Layout> = Some(Layout::new::<A>());
-    }
-
-    impl<A: Sized> Wrapper<[A]> {
-        const LAYOUT: Option<Layout> = Some(Layout::new::<A>());
-    }
-
-    match <Wrapper<T>>::LAYOUT {
-        Some(required) => layout.size() >= required.size() && layout.align() >= required.align(),
-        _ => true,
-    }
-}
 
 #[cold]
 #[inline(never)]
