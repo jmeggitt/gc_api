@@ -1,5 +1,5 @@
 [package]
-name = "gc_benchmark"
+name = "gc_benchmark_utils"
 version = "0.1.0"
 edition = "2021"
 
