@@ -12,7 +12,7 @@ pub struct Node<A: Alloc<Self>> {
 }
 
 impl<A: Alloc<Self> + TracingAllocator> Trace<A> for Node<A> {
-    fn trace(&self, tracer: &mut A::Tracer) {
+    fn trace(&self, tracer: &mut A::Tracer<'_>) {
         self.left.trace(tracer);
         self.right.trace(tracer);
     }

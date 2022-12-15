@@ -2,11 +2,11 @@ use crate::{Alloc, Gc};
 
 /// A simple and versatile Trace trait modeled after `std::hash::Hash`.
 pub trait Trace<A: TracingAllocator> {
-    fn trace(&self, tracer: &mut A::Tracer);
+    fn trace(&self, tracer: &mut A::Tracer<'_>);
 
     /// Honestly, I'm a little unsure of if this is necessary or not. However, `std::hash::Hash` has
     /// it so I will trust in their design logic.
-    fn trace_slice(data: &[Self], tracer: &mut A::Tracer)
+    fn trace_slice(data: &[Self], tracer: &mut A::Tracer<'_>)
     where
         Self: Sized,
     {
@@ -18,20 +18,20 @@ pub trait Trace<A: TracingAllocator> {
 
 /// This implementation simply switches the underying method from the tracer to consume the item.
 impl<T: Trace<A>, A: Alloc<T> + TracingAllocator> Trace<A> for Gc<T, A> {
-    fn trace(&self, tracer: &mut A::Tracer) {
+    fn trace(&self, tracer: &mut A::Tracer<'_>) {
         tracer.trace_obj(self)
     }
 }
 
 pub trait TracingAllocator {
-    type Tracer: Tracer<Self>;
+    type Tracer<'a>: 'a + Tracer<'a, Self>;
 }
 
 /// Not sure what I want this to be, but I thought I might as well leave it as a stub to make
 /// its usage more explicit.
-pub trait Tracer<A: ?Sized>: Sized
+pub trait Tracer<'a, A: ?Sized>: Sized
 where
-    A: TracingAllocator<Tracer = Self>,
+    A: TracingAllocator<Tracer<'a> = Self>,
 {
     fn trace_obj<T: ?Sized + Trace<A>>(&mut self, obj: &Gc<T, A>)
     where
@@ -54,7 +54,7 @@ mod impls {
                 $(#[$($macros)+])*
                 impl<A: TracingAllocator> Trace<A> for $name {
                     #[inline(always)]
-                    fn trace(&self, _: &mut A::Tracer) {}
+                    fn trace(&self, _: &mut A::Tracer<'_>) {}
                 }
             )+
         };
@@ -85,29 +85,29 @@ mod impls {
     #[cfg(target_has_atomic = "ptr")]
     impl<A: TracingAllocator, P> Trace<A> for AtomicPtr<P> {
         #[inline(always)]
-        fn trace(&self, _: &mut A::Tracer) {}
+        fn trace(&self, _: &mut A::Tracer<'_>) {}
     }
 
     impl_trace_nop! { String str }
 
     impl<A: TracingAllocator, P: ?Sized> Trace<A> for PhantomData<P> {
         #[inline(always)]
-        fn trace(&self, _: &mut A::Tracer) {}
+        fn trace(&self, _: &mut A::Tracer<'_>) {}
     }
 
     impl<A: TracingAllocator, P: ?Sized> Trace<A> for *const P {
         #[inline(always)]
-        fn trace(&self, _: &mut A::Tracer) {}
+        fn trace(&self, _: &mut A::Tracer<'_>) {}
     }
 
     impl<A: TracingAllocator, P: ?Sized> Trace<A> for *mut P {
         #[inline(always)]
-        fn trace(&self, _: &mut A::Tracer) {}
+        fn trace(&self, _: &mut A::Tracer<'_>) {}
     }
 
     impl<A: TracingAllocator, P: ?Sized> Trace<A> for NonNull<P> {
         #[inline(always)]
-        fn trace(&self, _: &mut A::Tracer) {}
+        fn trace(&self, _: &mut A::Tracer<'_>) {}
     }
 
     /// This is a wierd one. Is tracing or not-tracing more in the spirit of manually drop? At the
@@ -115,7 +115,7 @@ mod impls {
     /// or freeing a resource.
     impl<A: TracingAllocator, T: Trace<A>> Trace<A> for ManuallyDrop<T> {
         #[inline(always)]
-        fn trace(&self, _: &mut A::Tracer) {}
+        fn trace(&self, _: &mut A::Tracer<'_>) {}
     }
 
     macro_rules! impl_trace_tuple {
@@ -125,7 +125,7 @@ mod impls {
             {
                 #[inline]
                 #[allow(non_snake_case)]
-                fn trace(&self, tracer: &mut Alloc::Tracer) {
+                fn trace(&self, tracer: &mut Alloc::Tracer<'_>) {
                     let ($(ref $name,)+) = *self;
                     $($name.trace(tracer);)+
                 }
@@ -153,35 +153,35 @@ mod impls {
 
     impl<A: TracingAllocator, T: ?Sized + Trace<A>> Trace<A> for &T {
         #[inline]
-        fn trace(&self, tracer: &mut A::Tracer) {
+        fn trace(&self, tracer: &mut A::Tracer<'_>) {
             (**self).trace(tracer)
         }
     }
 
     impl<A: TracingAllocator, T: ?Sized + Trace<A>> Trace<A> for &mut T {
         #[inline]
-        fn trace(&self, tracer: &mut A::Tracer) {
+        fn trace(&self, tracer: &mut A::Tracer<'_>) {
             (**self).trace(tracer)
         }
     }
 
     impl<A: TracingAllocator, T: Trace<A>> Trace<A> for [T] {
         #[inline]
-        fn trace(&self, tracer: &mut A::Tracer) {
+        fn trace(&self, tracer: &mut A::Tracer<'_>) {
             Trace::trace_slice(self, tracer)
         }
     }
 
     impl<A: TracingAllocator, T: Trace<A>, const N: usize> Trace<A> for [T; N] {
         #[inline]
-        fn trace(&self, tracer: &mut A::Tracer) {
+        fn trace(&self, tracer: &mut A::Tracer<'_>) {
             Trace::trace_slice(self, tracer)
         }
     }
 
     impl<A: TracingAllocator, T: ?Sized + ToOwned + Trace<A>> Trace<A> for std::borrow::Cow<'_, T> {
         #[inline]
-        fn trace(&self, tracer: &mut A::Tracer) {
+        fn trace(&self, tracer: &mut A::Tracer<'_>) {
             Trace::trace(&**self, tracer)
         }
     }
@@ -189,7 +189,7 @@ mod impls {
     // Implement trace for std collections and types
     impl<A: TracingAllocator, T: Trace<A>> Trace<A> for Option<T> {
         #[inline]
-        fn trace(&self, tracer: &mut A::Tracer) {
+        fn trace(&self, tracer: &mut A::Tracer<'_>) {
             if let Some(x) = self {
                 x.trace(tracer)
             }
@@ -198,28 +198,28 @@ mod impls {
 
     impl<A: TracingAllocator, T: Trace<A>> Trace<A> for Box<T> {
         #[inline]
-        fn trace(&self, tracer: &mut A::Tracer) {
+        fn trace(&self, tracer: &mut A::Tracer<'_>) {
             Trace::trace(&**self, tracer)
         }
     }
 
     impl<A: TracingAllocator, T: Trace<A>> Trace<A> for Rc<T> {
         #[inline]
-        fn trace(&self, tracer: &mut A::Tracer) {
+        fn trace(&self, tracer: &mut A::Tracer<'_>) {
             Trace::trace(&**self, tracer)
         }
     }
 
     impl<A: TracingAllocator, T: Trace<A>> Trace<A> for Arc<T> {
         #[inline]
-        fn trace(&self, tracer: &mut A::Tracer) {
+        fn trace(&self, tracer: &mut A::Tracer<'_>) {
             Trace::trace(&**self, tracer)
         }
     }
 
     impl<A: TracingAllocator, T: Trace<A>> Trace<A> for Vec<T> {
         #[inline]
-        fn trace(&self, tracer: &mut A::Tracer) {
+        fn trace(&self, tracer: &mut A::Tracer<'_>) {
             Trace::trace_slice(&self[..], tracer)
         }
     }
