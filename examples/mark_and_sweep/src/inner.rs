@@ -1,15 +1,11 @@
 use crate::ptr_arena::PtrArena;
-use crate::roots::MarkSweepTracer;
-use crate::MarkSweepGC;
-use gc_api::alloc::CollectionType;
 use gc_api::error::{Error, ErrorKind};
 use gc_api::mark::Mark;
-use gc_api::trace::Trace;
+use log::trace;
 use std::alloc::{GlobalAlloc, Layout, System};
 use std::cell::Cell;
 use std::mem::size_of;
 use std::ptr;
-use log::trace;
 
 pub struct MarkSweepImpl {
     pub start: *mut u8,
@@ -26,8 +22,6 @@ impl MarkSweepImpl {
         trace!("Allocating heap: {:?}", layout);
         let start = unsafe { System.alloc(layout) };
         trace!("Allocated heap to: {:p}", start);
-
-        // println!("Start: {:p}, Layout: {:?}", start, layout);
 
         MarkSweepImpl {
             start,
@@ -92,14 +86,18 @@ impl MarkSweepImpl {
             let ref_table_slot = self.ref_table.claim_slot();
             *ref_table_slot = new_obj;
 
-
             // trace!("Allocated object ({:?}): {:p} -> {:p}", layout, ref_table_slot, new_obj);
             Ok(ref_table_slot as *mut u8)
         }
     }
 
     pub fn perform_sweep(&mut self) -> usize {
-        trace!("Sweeping heap [start: {:p}, cursor: {:p}, end: {:p}]", self.start, self.cursor, self.end);
+        trace!(
+            "Sweeping heap [start: {:p}, cursor: {:p}, end: {:p}]",
+            self.start,
+            self.cursor,
+            self.end
+        );
         let mut compressed = self.start;
         let mut cursor = self.start;
 
@@ -157,7 +155,11 @@ impl Drop for MarkSweepImpl {
 
         // println!("Attempting drop:");
         // println!("Start: {:p}, Layout: {:?}", self.start, layout);
-        trace!("Dropping heap [Start: {:p}, Layout: {:?}]", self.start, layout);
+        trace!(
+            "Dropping heap [Start: {:p}, Layout: {:?}]",
+            self.start,
+            layout
+        );
 
         unsafe {
             System.dealloc(self.start, layout);

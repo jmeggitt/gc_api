@@ -1,6 +1,5 @@
 //! Honestly, it is a somewhat sloppy implementation, but I chose to just do a more c-like approach.
 
-use std::ops::Index;
 use std::ptr::null_mut;
 
 /// A super simple arena which is used to act as a reference table. It functions similarly to the
@@ -57,7 +56,7 @@ impl PtrArena {
                 if *x == value {
                     *x = self.free_ptr as *mut u8;
                     self.free_ptr = x as *mut *mut u8;
-                    return
+                    return;
                 }
             }
         }
@@ -70,7 +69,7 @@ impl PtrArena {
             for x in &mut *chunk.ptr {
                 if *x == previous {
                     *x = new;
-                    return
+                    return;
                     // *x = self.free_ptr as *mut u8;
                     // self.free_ptr = x as *mut *mut u8;
                 }
@@ -78,20 +77,14 @@ impl PtrArena {
         }
         panic!("Failed to find slot to update")
     }
-
-    pub unsafe fn free_slot(&mut self, slot: *mut *mut u8) {
-        *slot = self.free_ptr as *mut u8;
-        self.free_ptr = slot;
-    }
 }
 
 #[repr(transparent)]
 struct PtrArenaChunk {
-    ptr: Box<[*mut u8; 1024]>
+    ptr: Box<[*mut u8; 1024]>,
 }
 
 impl PtrArenaChunk {
-
     pub fn contains_ptr(&self, ptr: *mut u8) -> bool {
         ptr >= &self.ptr[0] as *const _ as *mut u8 && ptr <= &self.ptr[1023] as *const _ as *mut u8
     }
@@ -102,15 +95,16 @@ impl PtrArenaChunk {
 
     fn new_linked_block() -> Self {
         // Allocate chunk
-        let mut boxed_ptrs: Box<[*mut u8; 1024]> = vec![null_mut(); 1024].into_boxed_slice().try_into().unwrap();
+        let mut boxed_ptrs: Box<[*mut u8; 1024]> = vec![null_mut(); 1024]
+            .into_boxed_slice()
+            .try_into()
+            .unwrap();
 
         // Fill in pointers 0-1023 to point to next cell.
         for index in 0..1023 {
             boxed_ptrs[index] = &boxed_ptrs[index + 1] as *const _ as *mut u8;
         }
 
-        PtrArenaChunk {
-            ptr: boxed_ptrs
-        }
+        PtrArenaChunk { ptr: boxed_ptrs }
     }
 }

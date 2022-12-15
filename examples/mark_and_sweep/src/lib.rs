@@ -5,12 +5,12 @@ use gc_api::error::{Error, ErrorKind};
 use gc_api::root::RootSource;
 use gc_api::trace::Trace;
 use gc_api::{Gc, Heap};
+use log::{debug, info, trace};
 use std::alloc::Layout;
 use std::cell::RefCell;
-use std::fmt::{self, Debug, Formatter};
+use std::fmt::{self, Display, Formatter};
 use std::ptr::NonNull;
 use std::rc::Rc;
-use log::{debug, trace, info};
 
 mod inner;
 mod ptr_arena;
@@ -22,7 +22,7 @@ pub struct MarkSweepGC {
     roots: Rc<RefCell<RootList>>,
 }
 
-impl Debug for MarkSweepGC {
+impl Display for MarkSweepGC {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         let inner = self.heap.borrow();
 
@@ -83,18 +83,33 @@ impl<T: Sized> Alloc<T> for MarkSweepGC {
 impl<T: 'static> Accessor<T, Self> for MarkSweepGC {
     type Guard<'g> = &'g T;
 
-    unsafe fn access<'g>(&'g self, handle: &'g <Self as Alloc<T>>::RawHandle) -> Result<Self::Guard<'g>, Error> {
+    unsafe fn access<'g>(
+        &'g self,
+        handle: &'g <Self as Alloc<T>>::RawHandle,
+    ) -> Result<Self::Guard<'g>, Error> {
         let inner = self.heap.borrow();
         if !inner.ref_table.contains_ptr(*handle) {
-            info!("Attempted to access pointer outside of ref table: {:p}",*handle);
-            return Err(Error::new(ErrorKind::IllegalState, "Failed to access pointer"))
+            info!(
+                "Attempted to access pointer outside of ref table: {:p}",
+                *handle
+            );
+            return Err(Error::new(
+                ErrorKind::IllegalState,
+                "Failed to access pointer",
+            ));
         }
 
         let obj_ptr = *(*handle as *const *const T);
 
-        if !inner.ref_table.contains_ptr(*handle) {
-            info!("Attempted to access object outside of heap ({:p} - {:p}): {:p}",inner.start, inner.end, obj_ptr);
-            return Err(Error::new(ErrorKind::IllegalState, "Failed to access pointer"))
+        if !inner.contains_ptr(*handle) {
+            info!(
+                "Attempted to access object outside of heap ({:p} - {:p}): {:p}",
+                inner.start, inner.end, obj_ptr
+            );
+            return Err(Error::new(
+                ErrorKind::IllegalState,
+                "Failed to access pointer",
+            ));
         }
 
         Ok(&*obj_ptr)
@@ -170,11 +185,11 @@ impl RootSource<Self> for MarkSweepGC {
 #[cfg(test)]
 mod test {
     use crate::MarkSweepGC;
-    use gc_benchmark_utils::tree::Node;
-    use log::LevelFilter;
-    use log::info;
-    use std::sync::Once;
     use gc_api::alloc::{Allocator, CollectionType};
+    use gc_benchmark_utils::tree::Node;
+    use log::info;
+    use log::LevelFilter;
+    use std::sync::Once;
 
     fn setup_logging() {
         static INIT: Once = Once::new();
@@ -207,7 +222,6 @@ mod test {
         info!("{:?}", &heap);
     }
 
-
     #[test]
     pub fn gc_tree() {
         setup_logging();
@@ -220,7 +234,6 @@ mod test {
         let inner = heap.heap.borrow();
         assert_eq!(inner.start, inner.cursor);
     }
-
 
     #[test]
     pub fn many_small() {
