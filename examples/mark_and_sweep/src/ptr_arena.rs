@@ -1,5 +1,6 @@
 //! Honestly, it is a somewhat sloppy implementation, but I chose to just do a more c-like approach.
 
+use std::ops::Index;
 use std::ptr::null_mut;
 
 /// A super simple arena which is used to act as a reference table. It functions similarly to the
@@ -30,6 +31,10 @@ impl PtrArena {
         }
     }
 
+    pub fn contains_ptr(&self, ptr: *mut u8) -> bool {
+        self.chunks.iter().any(|x| x.contains_ptr(ptr))
+    }
+
     pub unsafe fn claim_slot(&mut self) -> *mut *mut u8 {
         let slot = self.free_ptr;
         let next_slot = *slot as *mut *mut u8;
@@ -42,7 +47,36 @@ impl PtrArena {
             self.free_ptr = next_slot;
         }
 
+        assert!(self.contains_ptr(slot as *mut u8));
         slot
+    }
+
+    pub unsafe fn free_slot_by_value(&mut self, value: *mut u8) {
+        for chunk in &mut self.chunks {
+            for x in &mut *chunk.ptr {
+                if *x == value {
+                    *x = self.free_ptr as *mut u8;
+                    self.free_ptr = x as *mut *mut u8;
+                    return
+                }
+            }
+        }
+
+        panic!("Failed to find slot to free")
+    }
+
+    pub unsafe fn update_slot_by_value(&mut self, previous: *mut u8, new: *mut u8) {
+        for chunk in &mut self.chunks {
+            for x in &mut *chunk.ptr {
+                if *x == previous {
+                    *x = new;
+                    return
+                    // *x = self.free_ptr as *mut u8;
+                    // self.free_ptr = x as *mut *mut u8;
+                }
+            }
+        }
+        panic!("Failed to find slot to update")
     }
 
     pub unsafe fn free_slot(&mut self, slot: *mut *mut u8) {
@@ -57,6 +91,11 @@ struct PtrArenaChunk {
 }
 
 impl PtrArenaChunk {
+
+    pub fn contains_ptr(&self, ptr: *mut u8) -> bool {
+        ptr >= &self.ptr[0] as *const _ as *mut u8 && ptr <= &self.ptr[1023] as *const _ as *mut u8
+    }
+
     fn start_ptr(&self) -> *mut *mut u8 {
         &self.ptr[0] as *const _ as *mut *mut u8
     }
@@ -75,5 +114,3 @@ impl PtrArenaChunk {
         }
     }
 }
-
-
