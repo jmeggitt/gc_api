@@ -6,6 +6,10 @@ pub mod access;
 pub mod api;
 pub mod marker;
 
+pub use access::*;
+pub use api::*;
+pub use marker::*;
+
 /// A marker trait which can be used to indicate a type can be allocated by an allocator.
 pub trait Alloc<T: ?Sized>: Sized {
     /// An alternative to T that will guarentee that the created value can be accessed mutably by
@@ -37,6 +41,14 @@ pub trait Alloc<T: ?Sized>: Sized {
     /// of this function is initialzing new allocations, but may also include finalizing objects
     /// before dropping.
     unsafe fn handle_ptr(&self, handle: &Self::RawHandle) -> NonNull<u8>;
+
+    /// Unlike handle_ptr, the purpose of this function is to also provide pointer metadata (such as
+    /// with slices). This can be helpful for dealing with some cases where some types are handled
+    /// in a different implementation.
+    ///
+    /// # Safety
+    /// This function can only be used when exclusive access is held.
+    unsafe fn handle_ref(&self, handle: &Self::RawHandle) -> &T;
 }
 
 /// This trait is a helper that can be added to trait bounds. Writing `A: AllocMut<T>` is equivalent
@@ -44,24 +56,3 @@ pub trait Alloc<T: ?Sized>: Sized {
 pub trait AllocMut<T: ?Sized>: Alloc<T> + Alloc<<Self as Alloc<T>>::MutTy> {}
 
 impl<T: ?Sized, A> AllocMut<T> for A where A: Alloc<T> + Alloc<<Self as Alloc<T>>::MutTy> {}
-
-// /// A helper trait for transmuting a GC pointer.
-// pub trait ReinterpretHandle<T: ?Sized, R: ?Sized>: Alloc<T> + Alloc<R> {
-//     unsafe fn reinterpret_handle(
-//         &mut self,
-//         handle: <Self as Alloc<T>>::RawHandle,
-//     ) -> <Self as Alloc<R>>::RawHandle;
-// }
-//
-// impl<T, R, A> ReinterpretHandle<T, R> for A
-//     where
-//         A: Alloc<T> + Alloc<R, RawHandle = <A as Alloc<T>>::RawHandle>,
-//         <A as Alloc<T>>::Flags: BlindTransmute,
-// {
-//     unsafe fn reinterpret_handle(
-//         &mut self,
-//         handle: <Self as Alloc<T>>::RawHandle,
-//     ) -> <Self as Alloc<R>>::RawHandle {
-//         handle
-//     }
-// }

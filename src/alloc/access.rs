@@ -24,12 +24,9 @@ use crate::error::Error;
 use crate::{Alloc, Gc};
 use std::ops::{Deref, DerefMut};
 
-/// Marker trait to describe known accessors of data
-pub trait AccessedVia<Accessor> {}
-
 pub trait Accessor<T: ?Sized, A>: Sized
 where
-    A: AccessedVia<Self> + Alloc<T>,
+    A: Alloc<T>,
 {
     // TODO: Should Deref be replaced with Borrow?
     type Guard<'g>: Deref<Target = T>
@@ -65,7 +62,7 @@ where
 
 pub trait AccessorMut<T: ?Sized, A>: Accessor<T, A>
 where
-    A: AccessedVia<Self> + Alloc<T>,
+    A: Alloc<T>,
 {
     type GuardMut<'g>: DerefMut<Target = T>
     where

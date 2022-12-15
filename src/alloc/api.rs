@@ -13,6 +13,11 @@ pub const DEFAULT_ALLOC_RETRY_LIMIT: Option<u32> = Some(3);
 /// - Encode metadata in Gc pointer
 /// - Swap error out with trait system?
 pub trait Allocator {
+    /// Inner allocator type used by this GC
+    type Alloc;
+
+    fn as_raw_allocator(&mut self) -> &mut Self::Alloc;
+
     /// Mark a location where this allocator can safely yield to garbage collection. Garbage
     /// connection will only occur when the required allocators have yielded. Calling this function
     /// does not guarantee garbage collection will occur.
@@ -30,35 +35,35 @@ pub trait Allocator {
     fn request_gc(&mut self, request: CollectionType);
 
     #[inline(always)]
-    fn alloc<T>(&mut self, val: T) -> Gc<T, Self>
+    fn alloc<T>(&mut self, val: T) -> Gc<T, Self::Alloc>
     where
-        Self: Alloc<T>,
+        Self::Alloc: Alloc<T>,
     {
         self.alloc_with(|| val)
     }
 
     #[inline(always)]
-    fn alloc_mut<T>(&mut self, val: T) -> GcMut<T, Self>
+    fn alloc_mut<T>(&mut self, val: T) -> GcMut<T, Self::Alloc>
     where
-        Self: AllocMut<T>,
-        <Self as Alloc<T>>::MutTy: From<T>,
+        Self::Alloc: AllocMut<T>,
+        <Self::Alloc as Alloc<T>>::MutTy: From<T>,
     {
-        self.alloc_with::<_, <Self as Alloc<T>>::MutTy>(|| val.into())
+        self.alloc_with::<_, <Self::Alloc as Alloc<T>>::MutTy>(|| val.into())
     }
 
     #[inline(always)]
-    fn try_alloc<T>(&mut self, val: T) -> Result<Gc<T, Self>, Error>
+    fn try_alloc<T>(&mut self, val: T) -> Result<Gc<T, Self::Alloc>, Error>
     where
-        Self: Alloc<T>,
+        Self::Alloc: Alloc<T>,
     {
         self.try_alloc_with(|| val)
     }
 
     #[inline(always)]
-    fn alloc_with<F, T>(&mut self, f: F) -> Gc<T, Self>
+    fn alloc_with<F, T>(&mut self, f: F) -> Gc<T, Self::Alloc>
     where
         F: FnOnce() -> T,
-        Self: Alloc<T>,
+        Self::Alloc: Alloc<T>,
     {
         self.try_gc_alloc_with(DEFAULT_ALLOC_RETRY_LIMIT, f)
             .unwrap_or_else(|err| failed_allocation(err))
@@ -69,10 +74,10 @@ pub trait Allocator {
         &mut self,
         retry_limit: Option<u32>,
         f: F,
-    ) -> Result<Gc<T, Self>, Error>
+    ) -> Result<Gc<T, Self::Alloc>, Error>
     where
         F: FnOnce() -> T,
-        Self: Alloc<T>,
+        Self::Alloc: Alloc<T>,
     {
         let layout = Layout::new::<T>();
 
@@ -96,14 +101,14 @@ pub trait Allocator {
         mut retry_limit: Option<u32>,
         layout: Layout,
         init: F,
-    ) -> Result<Gc<T, Self>, Error>
+    ) -> Result<Gc<T, Self::Alloc>, Error>
     where
         T: ?Sized,
         F: FnOnce(NonNull<u8>),
-        Self: Alloc<T>,
+        Self::Alloc: Alloc<T>,
     {
         let handle = loop {
-            match unsafe { Alloc::<T>::try_alloc_layout(self, layout) } {
+            match unsafe { Alloc::<T>::try_alloc_layout(self.as_raw_allocator(), layout) } {
                 Ok(handle) => break handle,
                 Err(err) if err.kind() == OutOfMemory => {
                     // Decrement retry counter
@@ -122,7 +127,7 @@ pub trait Allocator {
         };
 
         unsafe {
-            let data_ptr = Alloc::<T>::handle_ptr(self, &handle);
+            let data_ptr = Alloc::<T>::handle_ptr(self.as_raw_allocator(), &handle);
             debug_assert!(
                 data_ptr.as_ptr() as usize & (layout.align() - 1) == 0,
                 "GC allocation did not meet required alignment"
@@ -141,11 +146,11 @@ pub trait Allocator {
         &mut self,
         retry_limit: Option<u32>,
         init: F,
-    ) -> Result<Gc<T, Self>, Error>
+    ) -> Result<Gc<T, Self::Alloc>, Error>
     where
         T: ?Sized + Default,
         F: FnOnce(&mut T),
-        Self: Alloc<T>,
+        Self::Alloc: Alloc<T>,
     {
         let layout = Layout::new::<T>();
 
@@ -160,19 +165,19 @@ pub trait Allocator {
     }
 
     #[inline(always)]
-    fn try_alloc_with<F, T>(&mut self, f: F) -> Result<Gc<T, Self>, Error>
+    fn try_alloc_with<F, T>(&mut self, f: F) -> Result<Gc<T, Self::Alloc>, Error>
     where
         F: FnOnce() -> T,
-        Self: Alloc<T>,
+        Self::Alloc: Alloc<T>,
     {
         self.try_gc_alloc_with(None, f)
     }
 
     #[inline(always)]
-    fn alloc_slice_copy<T>(&mut self, src: &[T]) -> Gc<[T], Self>
+    fn alloc_slice_copy<T>(&mut self, src: &[T]) -> Gc<[T], Self::Alloc>
     where
         T: Copy,
-        Self: Alloc<[T]>,
+        Self::Alloc: Alloc<[T]>,
     {
         let layout = Layout::new::<T>();
 
@@ -185,18 +190,18 @@ pub trait Allocator {
     }
 
     #[inline(always)]
-    fn alloc_slice_clone<T>(&mut self, src: &[T]) -> Gc<[T], Self>
+    fn alloc_slice_clone<T>(&mut self, src: &[T]) -> Gc<[T], Self::Alloc>
     where
         T: Clone,
-        Self: Alloc<[T]>,
+        Self::Alloc: Alloc<[T]>,
     {
         self.alloc_slice_fill_with(src.len(), |index| src[index].clone())
     }
 
     #[inline(always)]
-    fn alloc_str(&mut self, src: &str) -> Gc<str, Self>
+    fn alloc_str(&mut self, src: &str) -> Gc<str, Self::Alloc>
     where
-        Self: Alloc<str>,
+        Self::Alloc: Alloc<str>,
     {
         let layout = Layout::for_value(src.as_bytes());
 
@@ -209,20 +214,24 @@ pub trait Allocator {
     }
 
     #[inline(always)]
-    fn alloc_slice_fill_with<T, F>(&mut self, len: usize, f: F) -> Gc<[T], Self>
+    fn alloc_slice_fill_with<T, F>(&mut self, len: usize, f: F) -> Gc<[T], Self::Alloc>
     where
         F: FnMut(usize) -> T,
-        Self: Alloc<[T]>,
+        Self::Alloc: Alloc<[T]>,
     {
         self.try_alloc_slice_fill_with(len, f)
             .unwrap_or_else(|err| failed_allocation(err))
     }
 
     #[inline(always)]
-    fn try_alloc_slice_fill_with<T, F>(&mut self, len: usize, f: F) -> Result<Gc<[T], Self>, Error>
+    fn try_alloc_slice_fill_with<T, F>(
+        &mut self,
+        len: usize,
+        f: F,
+    ) -> Result<Gc<[T], Self::Alloc>, Error>
     where
         F: FnMut(usize) -> T,
-        Self: Alloc<[T]>,
+        Self::Alloc: Alloc<[T]>,
     {
         self.try_gc_alloc_slice_fill_with(Some(0), len, f)
     }
@@ -233,10 +242,10 @@ pub trait Allocator {
         retry_limit: Option<u32>,
         len: usize,
         mut f: F,
-    ) -> Result<Gc<[T], Self>, Error>
+    ) -> Result<Gc<[T], Self::Alloc>, Error>
     where
         F: FnMut(usize) -> T,
-        Self: Alloc<[T]>,
+        Self::Alloc: Alloc<[T]>,
     {
         let layout = Layout::array::<T>(len).unwrap_or_else(|err| failed_allocation(err));
 
@@ -250,29 +259,29 @@ pub trait Allocator {
     }
 
     #[inline(always)]
-    fn alloc_slice_fill_copy<T>(&mut self, len: usize, value: T) -> Gc<[T], Self>
+    fn alloc_slice_fill_copy<T>(&mut self, len: usize, value: T) -> Gc<[T], Self::Alloc>
     where
         T: Copy,
-        Self: Alloc<[T]>,
+        Self::Alloc: Alloc<[T]>,
     {
         self.alloc_slice_fill_with(len, |_| value)
     }
 
     #[inline(always)]
-    fn alloc_slice_fill_clone<T>(&mut self, len: usize, value: &T) -> Gc<[T], Self>
+    fn alloc_slice_fill_clone<T>(&mut self, len: usize, value: &T) -> Gc<[T], Self::Alloc>
     where
         T: Clone,
-        Self: Alloc<[T]>,
+        Self::Alloc: Alloc<[T]>,
     {
         self.alloc_slice_fill_with(len, |_| value.clone())
     }
 
     #[inline(always)]
-    fn alloc_slice_fill_iter<T, I>(&mut self, iter: I) -> Gc<[T], Self>
+    fn alloc_slice_fill_iter<T, I>(&mut self, iter: I) -> Gc<[T], Self::Alloc>
     where
         I: IntoIterator<Item = T>,
         I::IntoIter: ExactSizeIterator,
-        Self: Alloc<[T]>,
+        Self::Alloc: Alloc<[T]>,
     {
         let mut iter = iter.into_iter();
 
@@ -282,15 +291,16 @@ pub trait Allocator {
     }
 
     #[inline(always)]
-    fn alloc_slice_fill_default<T>(&mut self, len: usize) -> Gc<[T], Self>
+    fn alloc_slice_fill_default<T>(&mut self, len: usize) -> Gc<[T], Self::Alloc>
     where
         T: Default,
-        Self: Alloc<[T]>,
+        Self::Alloc: Alloc<[T]>,
     {
         self.alloc_slice_fill_with(len, |_| T::default())
     }
 }
 
+#[derive(Debug, Copy, Clone, Eq, PartialEq, Hash)]
 pub enum CollectionType {
     /// Request that a full GC is performed across the entire heap as soon as possible
     Full,
@@ -308,7 +318,6 @@ pub enum CollectionType {
     /// A custom collection request defined by a specific implementation.
     Custom(u64),
 }
-
 
 #[cold]
 #[inline(never)]

@@ -1,6 +1,6 @@
 //! A collection of traits and structures to help define the semantics of a multithreading garbage
 //! collector.
-use crate::alloc::access::{AccessedVia, Accessor};
+use crate::alloc::access::Accessor;
 use crate::alloc::{Alloc, AllocMut};
 use crate::error::Error;
 use std::mem::MaybeUninit;
@@ -71,7 +71,6 @@ impl<T: ?Sized, H: Alloc<T>> Gc<T, H> {
     #[inline(always)]
     pub fn get<'a, A>(&'a self, allocator: &'a A) -> <A as Accessor<T, H>>::Guard<'a>
     where
-        H: AccessedVia<A>,
         A: Accessor<T, H>,
     {
         allocator.read(self)
@@ -83,7 +82,6 @@ impl<T: ?Sized, H: Alloc<T>> Gc<T, H> {
         allocator: &'a A,
     ) -> Result<<A as Accessor<T, H>>::Guard<'a>, Error>
     where
-        H: AccessedVia<A>,
         A: Accessor<T, H>,
     {
         allocator.try_read(self)
@@ -92,6 +90,11 @@ impl<T: ?Sized, H: Alloc<T>> Gc<T, H> {
     /// Converts a `Gc<T>` into the underlying raw handle type.
     pub fn into_raw(self) -> <H as Alloc<T>>::RawHandle {
         self.handle
+    }
+
+    /// Converts a `Gc<T>` into the underlying raw handle type.
+    pub fn as_raw(&self) -> &<H as Alloc<T>>::RawHandle {
+        &self.handle
     }
 
     /// Reconstructs a Gc<T> from a raw handle type.
