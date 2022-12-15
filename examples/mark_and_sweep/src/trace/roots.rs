@@ -1,5 +1,3 @@
-use crate::inner::MarkWord;
-use crate::MarkSweepGC;
 use gc_api::alloc::Alloc;
 use gc_api::mark::Mark;
 use gc_api::root::RootSource;
@@ -7,6 +5,7 @@ use gc_api::trace::{Trace, Tracer, TracingAllocator};
 use gc_api::{Gc, Heap};
 use log::debug;
 use std::mem::size_of;
+use crate::inner::{MarkSweepAlloc, MarkWord, ObjectHandle};
 
 #[derive(Default)]
 pub struct RootList {
@@ -14,11 +13,11 @@ pub struct RootList {
 }
 
 struct RootEntry {
-    ptr: *mut u8,
-    trace_fn: fn(*mut u8, &mut MarkSweepTracer),
+    ptr: ObjectHandle,
+    trace_fn: fn(ObjectHandle, &mut MarkSweepTracer),
 }
 
-impl Trace<MarkSweepGC> for RootList {
+impl Trace<MarkSweepAlloc> for RootList {
     fn trace(&self, tracer: &mut MarkSweepTracer) {
         debug!("Performing trace of {} roots", self.inner.len());
         for entry in &self.inner {
@@ -28,22 +27,22 @@ impl Trace<MarkSweepGC> for RootList {
 }
 
 pub struct RootIndex {
-    root_ptr: *mut u8,
+    root_ptr: ObjectHandle,
     index: usize,
 }
 
-impl RootSource<MarkSweepGC> for RootList {
+impl RootSource<MarkSweepAlloc> for RootList {
     type Index = RootIndex;
 
-    fn add_root<T>(&mut self, root: &Gc<T, MarkSweepGC>) -> Self::Index
+    fn add_root<T>(&mut self, root: &Gc<T, MarkSweepAlloc>) -> Self::Index
     where
-        T: Trace<MarkSweepGC>,
+        T: Trace<MarkSweepAlloc>,
     {
-        fn trace_fn<K>(ptr: *mut u8, tracer: &mut MarkSweepTracer)
+        fn trace_fn<K>(ptr: ObjectHandle, tracer: &mut MarkSweepTracer)
         where
-            K: Trace<MarkSweepGC>,
+            K: Trace<MarkSweepAlloc>,
         {
-            let handle: Gc<K, MarkSweepGC> = unsafe { Gc::from_raw(ptr) };
+            let handle: Gc<K, MarkSweepAlloc> = unsafe { Gc::from_raw(ptr) };
             handle.trace(tracer);
         }
 
@@ -58,9 +57,9 @@ impl RootSource<MarkSweepGC> for RootList {
         }
     }
 
-    fn remove_root<T>(&mut self, root: &Gc<T, MarkSweepGC>) -> bool
+    fn remove_root<T>(&mut self, root: &Gc<T, MarkSweepAlloc>) -> bool
     where
-        T: Trace<MarkSweepGC>,
+        T: Trace<MarkSweepAlloc>,
     {
         self.remove_by_index(RootIndex {
             root_ptr: root.into_raw(),
@@ -80,14 +79,14 @@ impl RootSource<MarkSweepGC> for RootList {
     }
 }
 
-pub struct MarkSweepTracer {
-    gc: MarkSweepGC,
+pub struct MarkSweepTracer<'a> {
+    gc: &'a MarkSweepAlloc,
     mark_state: bool,
     pub traced: usize,
 }
 
-impl MarkSweepTracer {
-    pub(crate) fn new(gc: MarkSweepGC, mark_state: bool) -> Self {
+impl<'a> MarkSweepTracer<'a> {
+    pub(crate) fn new(gc: &'a MarkSweepAlloc, mark_state: bool) -> Self {
         MarkSweepTracer {
             gc,
             mark_state,
@@ -96,18 +95,18 @@ impl MarkSweepTracer {
     }
 }
 
-impl TracingAllocator for MarkSweepGC {
-    type Tracer = MarkSweepTracer;
+impl TracingAllocator for MarkSweepAlloc {
+    type Tracer<'a> = MarkSweepTracer<'a>;
 }
 
-impl Tracer<MarkSweepGC> for MarkSweepTracer {
-    fn trace_obj<T>(&mut self, obj: &Gc<T, MarkSweepGC>)
+impl<'a> Tracer<'a, MarkSweepAlloc> for MarkSweepTracer<'a> {
+    fn trace_obj<T>(&mut self, obj: &Gc<T, MarkSweepAlloc>)
     where
-        T: ?Sized + Trace<MarkSweepGC>,
-        MarkSweepGC: Alloc<T>,
+        T: ?Sized + Trace<MarkSweepAlloc>,
+        MarkSweepAlloc: Alloc<T>,
     {
         unsafe {
-            let ptr = <MarkSweepGC as Alloc<T>>::handle_ptr(&self.gc, obj.as_raw()).as_ptr();
+            let ptr = <MarkSweepAlloc as Alloc<T>>::handle_ptr(&self.gc, obj.as_raw()).as_ptr();
             let mark_ptr = (ptr as usize - size_of::<MarkWord>()) as *mut MarkWord;
 
             // Ensure this object is marked and return early if it is.
@@ -118,7 +117,7 @@ impl Tracer<MarkSweepGC> for MarkSweepTracer {
 
         self.traced += 1;
         unsafe {
-            <MarkSweepGC as Alloc<T>>::handle_ref(&self.gc.handle(), obj.as_raw()).trace(self);
+            <MarkSweepAlloc as Alloc<T>>::handle_ref(self.gc, obj.as_raw()).trace(self);
         }
     }
 }
