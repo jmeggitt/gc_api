@@ -1,4 +1,3 @@
-use lock_api::RawMutex;
 
 /// A mark type which is used to determine if a type is in use.
 ///
@@ -26,4 +25,5 @@ pub trait Mark {
 /// an object's header, it can make sense to use the remaining space for a mutex. This can allow a
 /// `Gc<T>` to provide interior mutability without requiring all object be wrapped in an explicit
 /// mutex.
-pub trait LockingMark: Mark + RawMutex {}
+#[cfg(feature = "lock_api")]
+pub trait LockingMark: Mark + lock_api::RawMutex {}
