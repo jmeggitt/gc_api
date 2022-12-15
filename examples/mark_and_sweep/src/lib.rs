@@ -187,72 +187,53 @@ mod test {
     use crate::MarkSweepGC;
     use gc_api::alloc::{Allocator, CollectionType};
     use gc_benchmark_utils::tree::Node;
-    use log::info;
-    use log::LevelFilter;
-    use std::sync::Once;
 
-    fn setup_logging() {
-        static INIT: Once = Once::new();
-
-        INIT.call_once(|| {
-            pretty_env_logger::formatted_builder()
-                .format_timestamp(None)
-                .filter_level(LevelFilter::Trace)
-                .init();
-        });
-    }
+    // Use a heap of 1MB for tests due to simplicity.
+    const HEAP_SIZE: usize = 1 << 20;
 
     #[test]
     pub fn build_tree() {
-        setup_logging();
-        // 1MB heap
-        let mut heap = MarkSweepGC::with_capacity(1 << 20);
+        let mut heap = MarkSweepGC::with_capacity(HEAP_SIZE);
 
         for height in 0..14 {
             let node = Node::build_tree_bottom_up(&mut heap, height);
-            info!("Height {}: {:?}", height, &heap);
 
             if let Some(node_value) = node {
                 let guard = node_value.get(&heap);
                 assert!(guard.verify_tree(&heap));
-                info!("   Passed Heap Verification");
             }
         }
-
-        info!("{:?}", &heap);
     }
 
     #[test]
     pub fn gc_tree() {
-        setup_logging();
-        // 1MB heap
-        let mut heap = MarkSweepGC::with_capacity(1 << 20);
+        let mut heap = MarkSweepGC::with_capacity(HEAP_SIZE);
+
+        // Create a simple node, but do not root it
         let node = Node::build_tree_bottom_up(&mut heap, 14);
+
+        // Perform a full garbage collection
         heap.request_gc(CollectionType::Full);
         heap.yield_point();
 
+        // Verify we no longer have any data on the heap
         let inner = heap.heap.borrow();
         assert_eq!(inner.start, inner.cursor);
     }
 
     #[test]
     pub fn many_small() {
-        setup_logging();
-        let mut heap = MarkSweepGC::with_capacity(1 << 20);
+        let mut heap = MarkSweepGC::with_capacity(HEAP_SIZE);
 
         let mut data = 1;
-        for round in 0..20 {
+        for _ in 0..20 {
             let mut verify_data = data;
             let node = Node::create_tree_impl(&mut heap, &mut data, 12);
-            info!("Round {}: {:?}", round, &heap);
 
             if let Some(node_value) = node {
                 let guard = node_value.get(&heap);
                 assert!(guard.verify_tree_impl(&heap, &mut verify_data));
-                info!("   Passed Heap Verification");
             }
         }
-
-        info!("{:?}", &heap);
     }
 }

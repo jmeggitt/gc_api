@@ -3,16 +3,12 @@ name = "mark_and_sweep"
 version = "0.1.0"
 edition = "2021"
 
-
-[profile.dev]
-debug = true
-[profile.release]
-debug = true
+[features]
+default = ["log/max_level_debug", "log/release_max_level_info"]
 
 [dependencies]
 gc_api = { path = "../.." }
-gc_benchmark_utils = { path = "../gc_benchmark_utils" }
 log = "0.4.17"
 
 [dev-dependencies]
-pretty_env_logger = "0.4.0"
+gc_benchmark_utils = { path = "../gc_benchmark_utils" }
