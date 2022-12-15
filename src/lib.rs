@@ -3,7 +3,6 @@
 use crate::alloc::access::Accessor;
 use crate::alloc::{Alloc, AllocMut};
 use crate::error::Error;
-use std::mem::MaybeUninit;
 
 pub mod alloc;
 pub mod error;
@@ -52,19 +51,6 @@ pub struct Gc<T: ?Sized, H: Alloc<T>> {
 }
 
 impl<T: ?Sized, H: Alloc<T>> Gc<T, H> {
-    // /// Attempts to retrieve an item, but may fail if the item no longer exists. While it can
-    // /// be helpful as a non-panicking alternative to [`Gc::get_with`], it does not provide any extra
-    // /// guarantees. This function may produce false positives since not all implementations can
-    // /// verify the lifetime of an item.
-    // pub fn get<'a: 'b, 'b>(&'a self) -> H::Target
-    // where
-    //     H: Access<'a, 'b, T>,
-    // {
-    //     unsafe {
-    //         H::access(&self.handle)
-    //     }
-    // }
-
     /// Use an allocator to access data held within a handle.
     ///
     /// This function is syntactic sugar for `allocator.read(self)`.
@@ -92,7 +78,7 @@ impl<T: ?Sized, H: Alloc<T>> Gc<T, H> {
         self.handle
     }
 
-    /// Converts a `Gc<T>` into the underlying raw handle type.
+    /// Get a reference into the underlying raw handle type.
     pub fn as_raw(&self) -> &<H as Alloc<T>>::RawHandle {
         &self.handle
     }
@@ -116,44 +102,6 @@ where
     fn clone(&self) -> Self {
         Gc {
             handle: self.handle.clone(),
-        }
-    }
-}
-
-impl<T, H: Alloc<MaybeUninit<T>>> Gc<MaybeUninit<T>, H> {
-    /// This implementation current reinterprets the type of self without modifying any of the
-    /// underlying data.
-    ///
-    /// FIXME: This approach may not be sufficient since GCs may store metadata about the type which
-    /// requires updating. (Ex: drop function for data type)
-    ///
-    /// # Safety
-    /// All fields must be initialized before being called.
-    pub unsafe fn assume_init(self) -> Gc<T, H>
-    where
-        H: Alloc<T, RawHandle = <H as Alloc<MaybeUninit<T>>>::RawHandle>,
-    {
-        Gc {
-            handle: self.handle,
-        }
-    }
-}
-
-impl<T, H: Alloc<[MaybeUninit<T>]>> Gc<[MaybeUninit<T>], H> {
-    /// This implementation current reinterprets the type of self without modifying any of the
-    /// underlying data.
-    ///
-    /// FIXME: This approach may not be sufficient since GCs may store metadata about the type which
-    /// requires updating. (Ex: drop function for data type)
-    ///
-    /// # Safety
-    /// All fields must be initialized before being called.
-    pub unsafe fn assume_init(self) -> Gc<[T], H>
-    where
-        H: Alloc<[T], RawHandle = <H as Alloc<[MaybeUninit<T>]>>::RawHandle>,
-    {
-        Gc {
-            handle: self.handle,
         }
     }
 }
