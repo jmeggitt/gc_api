@@ -6,7 +6,7 @@ use std::alloc::{GlobalAlloc, Layout, System};
 use std::ptr;
 use std::ptr::NonNull;
 
-use crate::inner::{layout, Object};
+use crate::inner::{layout, ObjectHandle};
 use crate::inner::MarkWord;
 
 /// Attempt to line the heap up with the page size, but we are not too worried if it is a bit off.
@@ -38,30 +38,13 @@ impl MarkSweepImpl {
         }
     }
 
-    pub fn contains_ptr(&self, ptr: *mut u8) -> bool {
-        ptr >= self.start && ptr <= self.end
-    }
-
-    pub fn capacity(&self) -> usize {
-        self.end as usize - self.start as usize
-    }
-
-    pub fn usage(&self) -> usize {
-        self.cursor as usize - self.start as usize
-    }
-
-    pub fn free_space(&self) -> usize {
-        self.end as usize - self.cursor as usize
-    }
-
-    pub unsafe fn alloc(&mut self, layout: Layout) -> Result<NonNull<NonNull<Object>>, Error> {
+    pub unsafe fn alloc(&mut self, layout: Layout) -> Result<ObjectHandle, Error> {
         if layout.align() > layout::FIXED_ALIGN {
             return Err(Error::from(ErrorKind::UnsupportedAlignment));
         }
 
         let (mark_ptr, new_obj) = layout::next_obj(self.cursor);
         let new_cursor = new_obj.add(layout.size());
-        let new_cursor = (new_obj as usize + layout.size()) as *mut u8;
 
         if new_cursor > self.end {
             return Err(Error::from(ErrorKind::OutOfMemory));

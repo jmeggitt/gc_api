@@ -2,7 +2,7 @@ use gc_api::alloc::Alloc;
 use gc_api::mark::Mark;
 use gc_api::root::RootSource;
 use gc_api::trace::{Trace, Tracer, TracingAllocator};
-use gc_api::{Gc, Heap};
+use gc_api::{Gc};
 use log::debug;
 use std::mem::size_of;
 use crate::inner::{MarkSweepAlloc, MarkWord, ObjectHandle};
@@ -106,7 +106,7 @@ impl<'a> Tracer<'a, MarkSweepAlloc> for MarkSweepTracer<'a> {
         MarkSweepAlloc: Alloc<T>,
     {
         unsafe {
-            let ptr = <MarkSweepAlloc as Alloc<T>>::handle_ptr(&self.gc, obj.as_raw()).as_ptr();
+            let ptr = <MarkSweepAlloc as Alloc<T>>::handle_ptr(self.gc, obj.as_raw()).as_ptr();
             let mark_ptr = (ptr as usize - size_of::<MarkWord>()) as *mut MarkWord;
 
             // Ensure this object is marked and return early if it is.

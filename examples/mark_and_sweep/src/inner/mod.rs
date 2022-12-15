@@ -1,13 +1,11 @@
 use crate::trace::MarkSweepTracer;
 use std::alloc::Layout;
 use std::cell::RefCell;
-use std::mem;
 use gc_api::alloc::{Accessor, Alloc};
 use gc_api::error::Error;
 use std::ptr::NonNull;
 use gc_api::trace::Trace;
 use log::{trace, debug};
-use gc_api::Gc;
 
 mod layout;
 mod mark;
@@ -18,7 +16,6 @@ mod reference_table;
 pub use mark::MarkWord;
 use crate::inner::heap::MarkSweepImpl;
 pub use layout::{Object, ObjectHandle};
-use crate::MarkSweepGC;
 
 #[repr(transparent)]
 pub struct MarkSweepAlloc(MarkSweepImpl);
@@ -51,7 +48,6 @@ impl MarkSweepAlloc {
 
             inner.requested_gc = false;
             inner.global_mark_state = !inner.global_mark_state;
-            let desired_mark_state = inner.global_mark_state;
         }
 
             let mut tracer = MarkSweepTracer::new( self, self.0.global_mark_state);
@@ -71,9 +67,6 @@ impl MarkSweepAlloc {
         let MarkSweepAlloc(inner) = self;
 
         inner.requested_gc = true;
-        // unsafe {
-        //     inner.as_mut().requested_gc = true;
-        // }
     }
 }
 

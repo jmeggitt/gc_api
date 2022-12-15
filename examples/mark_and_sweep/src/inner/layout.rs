@@ -20,8 +20,3 @@ pub fn next_obj(pos: *mut Object) -> (*mut MarkWord, *mut Object) {
 
     (mark_word, obj)
 }
-
-#[inline(always)]
-pub unsafe fn mark_for_obj<'a>(obj: *mut Object) -> &'a MarkWord {
-    &*(obj.offset(-(size_of::<MarkWord>() as isize)) as *const MarkWord)
-}
