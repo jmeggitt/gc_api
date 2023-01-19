@@ -1,4 +1,4 @@
-use crate::trace::MarkSweepTracer;
+use crate::trace::MarkCompactTracer;
 use gc_api::alloc::{Accessor, AccessorMut, Alloc};
 use gc_api::error::Error;
 use gc_api::trace::Trace;
@@ -12,18 +12,18 @@ mod layout;
 mod mark;
 mod reference_table;
 
-use crate::inner::heap::MarkSweepImpl;
+use crate::inner::heap::MarkCompactImpl;
 pub use layout::{Object, ObjectHandle};
 pub use mark::MarkWord;
 
 #[repr(transparent)]
-pub struct MarkSweepAlloc(MarkSweepImpl);
+pub struct MarkCompactAlloc(MarkCompactImpl);
 
-impl MarkSweepAlloc {
+impl MarkCompactAlloc {
     pub fn with_capacity(capacity: usize) -> Self {
-        let gc_impl = MarkSweepImpl::with_capacity(capacity);
+        let gc_impl = MarkCompactImpl::with_capacity(capacity);
 
-        MarkSweepAlloc(gc_impl)
+        MarkCompactAlloc(gc_impl)
     }
 
     #[inline(always)]
@@ -36,19 +36,19 @@ impl MarkSweepAlloc {
     pub fn perform_gc<T: Trace<Self>>(&mut self, roots: &T) -> usize {
         debug!("Performing GC");
         {
-            let MarkSweepAlloc(inner) = self;
+            let MarkCompactAlloc(inner) = self;
 
             inner.requested_gc = false;
             inner.global_mark_state = !inner.global_mark_state;
         }
 
-        let mut tracer = MarkSweepTracer::new(self, self.0.global_mark_state);
+        let mut tracer = MarkCompactTracer::new(self, self.0.global_mark_state);
         trace!("Tracing shared roots");
         roots.trace(&mut tracer);
         trace!("Found a total of {} objects", tracer.traced);
 
         unsafe {
-            let bytes_cleared = self.0.perform_sweep();
+            let bytes_cleared = self.0.perform_compact();
             debug!(
                 "Performed cleanup which cleared {} bytes of space",
                 bytes_cleared
@@ -59,20 +59,20 @@ impl MarkSweepAlloc {
     }
 
     pub fn gc_at_next_yield(&mut self) {
-        let MarkSweepAlloc(inner) = self;
+        let MarkCompactAlloc(inner) = self;
 
         inner.requested_gc = true;
     }
 }
 
-impl<T: Sized> Alloc<T> for MarkSweepAlloc {
+impl<T: Sized> Alloc<T> for MarkCompactAlloc {
     type MutTy = RefCell<T>;
     type RawHandle = NonNull<NonNull<Object>>;
 
     type Flags = Self;
 
     unsafe fn try_alloc_layout(&mut self, layout: Layout) -> Result<Self::RawHandle, Error> {
-        let MarkSweepAlloc(inner) = self;
+        let MarkCompactAlloc(inner) = self;
 
         inner.alloc(layout)
     }
@@ -86,30 +86,30 @@ impl<T: Sized> Alloc<T> for MarkSweepAlloc {
     }
 }
 
-pub struct MarkSweepAccessor;
+pub struct MarkCompactAccessor;
 
-impl<T: 'static> Accessor<T, MarkSweepAlloc> for MarkSweepAccessor {
+impl<T: 'static> Accessor<T, MarkCompactAlloc> for MarkCompactAccessor {
     type Guard<'g> = &'g T;
 
     unsafe fn access<'g>(
         &'g self,
-        handle: &'g <MarkSweepAlloc as Alloc<T>>::RawHandle,
+        handle: &'g <MarkCompactAlloc as Alloc<T>>::RawHandle,
     ) -> Result<Self::Guard<'g>, Error> {
         Ok(&*handle.as_ptr().read().cast().as_ptr())
     }
 }
 
-impl<T: 'static> AccessorMut<T, MarkSweepAlloc> for MarkSweepAccessor {
+impl<T: 'static> AccessorMut<T, MarkCompactAlloc> for MarkCompactAccessor {
     type GuardMut<'g> = std::cell::RefMut<'g, T>;
 
     unsafe fn access_mut<'g>(
         &'g self,
-        handle: &'g <MarkSweepAlloc as Alloc<<MarkSweepAlloc as Alloc<T>>::MutTy>>::RawHandle,
+        handle: &'g <MarkCompactAlloc as Alloc<<MarkCompactAlloc as Alloc<T>>::MutTy>>::RawHandle,
     ) -> Result<Self::GuardMut<'g>, Error> {
         Ok((*handle
             .as_ptr()
             .read()
-            .cast::<<MarkSweepAlloc as Alloc<T>>::MutTy>()
+            .cast::<<MarkCompactAlloc as Alloc<T>>::MutTy>()
             .as_ptr())
         .borrow_mut())
     }

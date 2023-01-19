@@ -7,8 +7,8 @@ future, some [canonical GCs] may be implemented here to provide benchmark compar
 > `gc_api` is able to serve the needs of a GC. While they may help as examples, they should be considered work in
 > progress tests at the moment.
 
-## `mark_and_sweep`
-An extremely simple bare-bones mark and sweep garbage collector. At the moment, the current implementation is a bit
+## `mark_and_compact`
+An extremely simple bare-bones mark and compact garbage collector. At the moment, the current implementation is a bit
 sloppy as it is only being used for testing purposes.
 
 

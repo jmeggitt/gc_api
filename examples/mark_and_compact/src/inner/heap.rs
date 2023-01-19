@@ -12,7 +12,7 @@ use crate::inner::{layout, ObjectHandle};
 /// Attempt to line the heap up with the page size, but we are not too worried if it is a bit off.
 const HEAP_ALIGNMENT: usize = 4096;
 
-pub struct MarkSweepImpl {
+pub struct MarkCompactImpl {
     pub start: *mut u8,
     pub end: *mut u8,
     pub cursor: *mut u8,
@@ -21,14 +21,14 @@ pub struct MarkSweepImpl {
     pub requested_gc: bool,
 }
 
-impl MarkSweepImpl {
+impl MarkCompactImpl {
     pub fn with_capacity(len: usize) -> Self {
         let layout = Layout::from_size_align(len, HEAP_ALIGNMENT).unwrap();
         trace!("Allocating heap: {:?}", layout);
         let start = unsafe { System.alloc(layout) };
         trace!("Allocated heap to: {:p}", start);
 
-        MarkSweepImpl {
+        MarkCompactImpl {
             start,
             end: (start as usize + len) as *mut u8,
             cursor: start,
@@ -66,9 +66,9 @@ impl MarkSweepImpl {
         Ok(NonNull::new_unchecked(ref_table_slot as *mut _))
     }
 
-    pub unsafe fn perform_sweep(&mut self) -> usize {
+    pub unsafe fn perform_compact(&mut self) -> usize {
         trace!(
-            "Sweeping heap [start: {:p}, cursor: {:p}, end: {:p}]",
+            "Compacting heap [start: {:p}, cursor: {:p}, end: {:p}]",
             self.start,
             self.cursor,
             self.end
@@ -102,7 +102,7 @@ impl MarkSweepImpl {
     }
 }
 
-impl Drop for MarkSweepImpl {
+impl Drop for MarkCompactImpl {
     fn drop(&mut self) {
         let len = self.end as usize - self.start as usize;
         let layout = Layout::from_size_align(len, HEAP_ALIGNMENT).unwrap();

@@ -1,4 +1,4 @@
-use crate::MarkSweepGC;
+use crate::MarkCompactGC;
 use gc_api::alloc::{Allocator, CollectionType};
 use gc_benchmark_utils::tree::Node;
 
@@ -7,7 +7,7 @@ const HEAP_SIZE: usize = 1 << 20;
 
 #[test]
 pub fn build_tree() {
-    let mut heap = MarkSweepGC::with_capacity(HEAP_SIZE);
+    let mut heap = MarkCompactGC::with_capacity(HEAP_SIZE);
 
     for height in 0..14 {
         let node = Node::build_tree_bottom_up(&mut heap, height);
@@ -21,7 +21,7 @@ pub fn build_tree() {
 
 #[test]
 pub fn gc_tree() {
-    let mut heap = MarkSweepGC::with_capacity(HEAP_SIZE);
+    let mut heap = MarkCompactGC::with_capacity(HEAP_SIZE);
 
     // Create a simple node, but do not root it
     let node = Node::build_tree_bottom_up(&mut heap, 14);
@@ -37,7 +37,7 @@ pub fn gc_tree() {
 
 #[test]
 pub fn many_small() {
-    let mut heap = MarkSweepGC::with_capacity(HEAP_SIZE);
+    let mut heap = MarkCompactGC::with_capacity(HEAP_SIZE);
 
     let mut data = 1;
     for _ in 0..20 {
