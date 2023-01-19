@@ -1,4 +1,3 @@
-
 /// A mark type which is used to determine if a type is in use.
 ///
 /// > **Notes:** There seem to be two primary types of object mark depending on implementation.

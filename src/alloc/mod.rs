@@ -53,6 +53,13 @@ pub trait Alloc<T: ?Sized>: Sized {
 
 /// This trait is a helper that can be added to trait bounds. Writing `A: AllocMut<T>` is equivalent
 /// to `A: Alloc<T> + Alloc<<Self as Alloc<T>>::MutAlternative>`
-pub trait AllocMut<T: ?Sized>: Alloc<T> + Alloc<<Self as Alloc<T>>::MutTy> {}
+pub trait AllocMut<T: ?Sized>: Alloc<T> + Alloc<<Self as Alloc<T>>::MutTy> {
+    type RawHandle: Sized;
+}
 
-impl<T: ?Sized, A> AllocMut<T> for A where A: Alloc<T> + Alloc<<Self as Alloc<T>>::MutTy> {}
+impl<T: ?Sized, A> AllocMut<T> for A
+where
+    A: Alloc<T> + Alloc<<Self as Alloc<T>>::MutTy>,
+{
+    type RawHandle = <A as Alloc<<A as Alloc<T>>::MutTy>>::RawHandle;
+}

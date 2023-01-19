@@ -20,8 +20,9 @@
 //!  - There needs to be a way to easily initialize types with or without interior mutability.
 //!
 
+use crate::alloc::AllocMut;
 use crate::error::Error;
-use crate::{Alloc, Gc};
+use crate::{Alloc, Gc, GcMut};
 use std::ops::{Deref, DerefMut};
 
 pub trait Accessor<T: ?Sized, A>: Sized
@@ -62,7 +63,7 @@ where
 
 pub trait AccessorMut<T: ?Sized, A>: Accessor<T, A>
 where
-    A: Alloc<T>,
+    A: AllocMut<T>,
 {
     type GuardMut<'g>: DerefMut<Target = T>
     where
@@ -70,13 +71,13 @@ where
 
     /// Get immutable access to
     #[inline(always)]
-    fn write<'g>(&'g self, object: &'g Gc<T, A>) -> Self::GuardMut<'g> {
+    fn write<'g>(&'g self, object: &'g GcMut<T, A>) -> Self::GuardMut<'g> {
         self.try_write(object)
             .unwrap_or_else(|err| failed_access(err))
     }
 
     #[inline(always)]
-    fn try_write<'g>(&'g self, object: &'g Gc<T, A>) -> Result<Self::GuardMut<'g>, Error> {
+    fn try_write<'g>(&'g self, object: &'g GcMut<T, A>) -> Result<Self::GuardMut<'g>, Error> {
         unsafe { self.access_mut(&object.handle) }
     }
 
@@ -86,7 +87,7 @@ where
     /// The handle must corespond to a valid GC object in the heap used by this accessor.
     unsafe fn access_mut<'g>(
         &'g self,
-        handle: &'g <A as Alloc<T>>::RawHandle,
+        handle: &'g <A as Alloc<<A as Alloc<T>>::MutTy>>::RawHandle,
     ) -> Result<Self::GuardMut<'g>, Error>;
 }
 
