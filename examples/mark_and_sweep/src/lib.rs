@@ -1,11 +1,11 @@
-use crate::trace::{MarkSweepTracer, RootIndex, RootList};
+use crate::inner::{MarkSweepAlloc, ObjectHandle};
+use crate::trace::MarkSweepTracer;
 use gc_api::alloc::{Accessor, Alloc, Allocator, CollectionType};
-use gc_api::error::{Error};
-use gc_api::root::RootSource;
+use gc_api::error::Error;
+use gc_api::trace::roots::{GcRootStorage, RootStorage, UniformHandleRoots};
 use gc_api::trace::Trace;
-use gc_api::{Gc};
-use log::{trace};
-use crate::inner::MarkSweepAlloc;
+use gc_api::Gc;
+use log::trace;
 
 mod inner;
 mod trace;
@@ -15,33 +15,18 @@ mod tests;
 
 pub struct MarkSweepGC {
     alloc: MarkSweepAlloc,
-    roots: RootList,
+    roots: UniformHandleRoots<MarkSweepAlloc, ObjectHandle>,
 }
 
 impl MarkSweepGC {
     /// Create a new mark and sweep GC with the given heap size.
     pub fn with_capacity(len: usize) -> Self {
-
         MarkSweepGC {
             alloc: MarkSweepAlloc::with_capacity(len),
             roots: Default::default(),
         }
     }
 }
-
-// impl Heap for MarkSweepGC {
-//     type Handle = Self;
-//     type Allocator = Self;
-//
-//     fn create_allocator(&self) -> Self::Allocator {
-//         self.alloc
-//         // self.clone()
-//     }
-//
-//     fn handle(&self) -> Self::Handle {
-//         self.clone()
-//     }
-// }
 
 impl<T: 'static> Accessor<T, MarkSweepAlloc> for MarkSweepGC {
     type Guard<'g> = &'g T;
@@ -78,27 +63,20 @@ impl Trace<MarkSweepAlloc> for MarkSweepGC {
     }
 }
 
-impl RootSource<MarkSweepAlloc> for MarkSweepGC {
-    type Index = RootIndex;
+impl RootStorage<MarkSweepAlloc> for MarkSweepGC {
+    type Index = usize;
 
-    fn add_root<T>(&mut self, root: &Gc<T, MarkSweepAlloc>) -> Self::Index
-    where
-        T: Trace<MarkSweepAlloc>,
-        MarkSweepAlloc: Alloc<T>,
-    {
-        self.roots.add_root(root)
-    }
-
-    fn remove_by_index(&mut self, index: Self::Index) -> bool {
-        self.roots.remove_by_index(index)
-    }
-
-    fn remove_root<T>(&mut self, root: &Gc<T, MarkSweepAlloc>) -> bool
-    where
-        T: Trace<MarkSweepAlloc>,
-        MarkSweepAlloc: Alloc<T>,
-    {
-        self.roots.remove_root(root)
+    fn remove_root(&mut self, index: Self::Index) -> bool {
+        self.roots.remove_root(index)
     }
 }
 
+impl<T> GcRootStorage<T, MarkSweepAlloc> for MarkSweepGC
+where
+    T: Trace<MarkSweepAlloc>,
+    MarkSweepAlloc: Alloc<T, RawHandle = ObjectHandle>,
+{
+    fn add_root(&mut self, root: &Gc<T, MarkSweepAlloc>) -> Self::Index {
+        self.roots.add_root(root)
+    }
+}

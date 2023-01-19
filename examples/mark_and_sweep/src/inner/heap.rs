@@ -6,8 +6,8 @@ use std::alloc::{GlobalAlloc, Layout, System};
 use std::ptr;
 use std::ptr::NonNull;
 
-use crate::inner::{layout, ObjectHandle};
 use crate::inner::MarkWord;
+use crate::inner::{layout, ObjectHandle};
 
 /// Attempt to line the heap up with the page size, but we are not too worried if it is a bit off.
 const HEAP_ALIGNMENT: usize = 4096;
@@ -53,7 +53,10 @@ impl MarkSweepImpl {
         self.cursor = new_cursor;
 
         // Write object mark
-        ptr::write(mark_ptr, MarkWord::new(layout.size(), self.global_mark_state));
+        ptr::write(
+            mark_ptr,
+            MarkWord::new(layout.size(), self.global_mark_state),
+        );
 
         // Write object
         let ref_table_slot = self.ref_table.claim_slot();

@@ -1,7 +1,7 @@
 use gc_api::alloc::{Accessor, Alloc, Allocator};
+use gc_api::trace::roots::{GcRootStorage, StackRoots};
 use gc_api::trace::{Trace, TracingAllocator};
 use gc_api::Gc;
-use gc_api::trace::roots::{GcRootStorage, RootStorage, StackRoots};
 
 use crate::workload;
 

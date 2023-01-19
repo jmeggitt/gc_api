@@ -4,7 +4,7 @@ version = "0.1.0"
 edition = "2021"
 
 [features]
-default = ["log/max_level_debug", "log/release_max_level_info"]
+default = ["log/max_level_debug", "log/release_max_level_info", "gc_api/slab"]
 
 [dependencies]
 gc_api = { path = "../.." }

@@ -1,33 +1,25 @@
 use crate::trace::MarkSweepTracer;
+use gc_api::alloc::{Accessor, AccessorMut, Alloc};
+use gc_api::error::Error;
+use gc_api::trace::Trace;
+use log::{debug, trace};
 use std::alloc::Layout;
 use std::cell::RefCell;
-use gc_api::alloc::{Accessor, Alloc};
-use gc_api::error::Error;
 use std::ptr::NonNull;
-use gc_api::trace::Trace;
-use log::{trace, debug};
 
+mod heap;
 mod layout;
 mod mark;
-mod heap;
 mod reference_table;
 
-
-pub use mark::MarkWord;
 use crate::inner::heap::MarkSweepImpl;
 pub use layout::{Object, ObjectHandle};
+pub use mark::MarkWord;
 
 #[repr(transparent)]
 pub struct MarkSweepAlloc(MarkSweepImpl);
-// pub struct MarkSweepAlloc(NonNull<MarkSweepImpl>);
 
 impl MarkSweepAlloc {
-    // pub fn with_capacity(capacity: usize) -> Self {
-    //     let gc_impl = MarkSweepImpl::with_capacity(capacity);
-    //     let ptr = NonNull::new(Box::into_raw(Box::new(gc_impl)));
-    //
-    //     MarkSweepAlloc(ptr.expect("Box can not produce null"))
-    // }
     pub fn with_capacity(capacity: usize) -> Self {
         let gc_impl = MarkSweepImpl::with_capacity(capacity);
 
@@ -50,14 +42,17 @@ impl MarkSweepAlloc {
             inner.global_mark_state = !inner.global_mark_state;
         }
 
-            let mut tracer = MarkSweepTracer::new( self, self.0.global_mark_state);
-            trace!("Tracing shared roots");
-            roots.trace(&mut tracer);
-            trace!("Found a total of {} objects", tracer.traced);
+        let mut tracer = MarkSweepTracer::new(self, self.0.global_mark_state);
+        trace!("Tracing shared roots");
+        roots.trace(&mut tracer);
+        trace!("Found a total of {} objects", tracer.traced);
 
         unsafe {
             let bytes_cleared = self.0.perform_sweep();
-            debug!("Performed cleanup which cleared {} bytes of space",bytes_cleared);
+            debug!(
+                "Performed cleanup which cleared {} bytes of space",
+                bytes_cleared
+            );
 
             bytes_cleared
         }
@@ -96,11 +91,26 @@ pub struct MarkSweepAccessor;
 impl<T: 'static> Accessor<T, MarkSweepAlloc> for MarkSweepAccessor {
     type Guard<'g> = &'g T;
 
-    unsafe fn access<'g>(&'g self, handle: &'g <MarkSweepAlloc as Alloc<T>>::RawHandle) -> Result<Self::Guard<'g>, Error> {
+    unsafe fn access<'g>(
+        &'g self,
+        handle: &'g <MarkSweepAlloc as Alloc<T>>::RawHandle,
+    ) -> Result<Self::Guard<'g>, Error> {
         Ok(&*handle.as_ptr().read().cast().as_ptr())
     }
 }
 
+impl<T: 'static> AccessorMut<T, MarkSweepAlloc> for MarkSweepAccessor {
+    type GuardMut<'g> = std::cell::RefMut<'g, T>;
 
-
-
+    unsafe fn access_mut<'g>(
+        &'g self,
+        handle: &'g <MarkSweepAlloc as Alloc<<MarkSweepAlloc as Alloc<T>>::MutTy>>::RawHandle,
+    ) -> Result<Self::GuardMut<'g>, Error> {
+        Ok((*handle
+            .as_ptr()
+            .read()
+            .cast::<<MarkSweepAlloc as Alloc<T>>::MutTy>()
+            .as_ptr())
+        .borrow_mut())
+    }
+}
