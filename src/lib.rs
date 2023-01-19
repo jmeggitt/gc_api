@@ -7,7 +7,6 @@ use crate::error::Error;
 pub mod alloc;
 pub mod error;
 pub mod mark;
-pub mod root;
 pub mod trace;
 
 /// An owned handle into a garbage collected heap. The heap should outlive
