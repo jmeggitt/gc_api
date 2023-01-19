@@ -1,7 +1,7 @@
 use gc_api::alloc::{Accessor, Alloc, Allocator};
-use gc_api::root::RootSource;
 use gc_api::trace::{Trace, TracingAllocator};
 use gc_api::Gc;
+use gc_api::trace::roots::{GcRootStorage, RootStorage, StackRoots};
 
 use crate::workload;
 
@@ -18,10 +18,10 @@ impl<A: Alloc<Self> + TracingAllocator> Trace<A> for Node<A> {
     }
 }
 
-impl<A: Alloc<Self> + TracingAllocator> Node<A> {
+impl<A: Alloc<Self>> Node<A> {
     pub fn build_tree_bottom_up<B>(allocator: &mut B, height: usize) -> Option<Gc<Self, A>>
     where
-        B: RootSource<A> + Allocator<Alloc = A>,
+        B: GcRootStorage<Self, A> + Allocator<Alloc = A>,
     {
         let mut data = 1;
         Self::create_tree_impl(allocator, &mut data, height)
@@ -68,16 +68,19 @@ impl<A: Alloc<Self> + TracingAllocator> Node<A> {
         height: usize,
     ) -> Option<Gc<Self, A>>
     where
-        B: RootSource<A> + Allocator<Alloc = A>,
+        B: GcRootStorage<Self, A> + Allocator<Alloc = A>,
     {
         if height == 0 {
             return None;
         }
 
-        let left = Self::create_tree_impl(allocator, data, height - 1);
-        let left_root = left.as_ref().map(|x| allocator.add_root(x));
-        let right = Self::create_tree_impl(allocator, data, height - 1);
-        let right_root = right.as_ref().map(|x| allocator.add_root(x));
+        let mut stack_roots = StackRoots::<B, _>::from(allocator);
+
+        let left = Self::create_tree_impl(&mut *stack_roots, data, height - 1);
+        left.as_ref().map(|x| stack_roots.add_root(x));
+
+        let right = Self::create_tree_impl(&mut *stack_roots, data, height - 1);
+        right.as_ref().map(|x| stack_roots.add_root(x));
 
         let next = Node {
             left,
@@ -87,9 +90,6 @@ impl<A: Alloc<Self> + TracingAllocator> Node<A> {
 
         *data = workload(*data, u32::BITS);
 
-        let res = Some(allocator.alloc(next));
-        left_root.map(|x| allocator.remove_by_index(x));
-        right_root.map(|x| allocator.remove_by_index(x));
-        res
+        Some(stack_roots.alloc(next))
     }
 }

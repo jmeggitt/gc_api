@@ -16,6 +16,20 @@ pub struct StackRoots<
     _phantom: PhantomData<A>,
 }
 
+impl<'r, R, A, S> From<&'r mut R> for StackRoots<'r, R, A, S>
+    where
+        R: RootStorage<A>,
+        S: Array<Item = R::Index>,
+{
+    fn from(root_source: &'r mut R) -> Self {
+        StackRoots {
+            storage: SmallVec::new(),
+            root_source,
+            _phantom: PhantomData,
+        }
+    }
+}
+
 impl<'r, R, A, S> RootStorage<A> for StackRoots<'r, R, A, S>
 where
     R: RootStorage<A>,
