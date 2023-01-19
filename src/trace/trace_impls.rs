@@ -1,5 +1,5 @@
-use crate::trace::{Trace, Tracer, TracingAllocator};
 use crate::alloc::Alloc;
+use crate::trace::{Trace, Tracer, TracingAllocator};
 use crate::Gc;
 use std::marker::PhantomData;
 use std::mem::ManuallyDrop;
@@ -9,7 +9,6 @@ use std::rc::Rc;
 use std::sync::atomic::*;
 use std::sync::Arc;
 
-
 /// This implementation simply switches the underying method from the tracer to consume the item.
 impl<T: Trace<A>, A: Alloc<T> + TracingAllocator> Trace<A> for Gc<T, A> {
     #[inline(always)]
@@ -17,7 +16,6 @@ impl<T: Trace<A>, A: Alloc<T> + TracingAllocator> Trace<A> for Gc<T, A> {
         tracer.trace_obj(self)
     }
 }
-
 
 macro_rules! impl_trace_nop {
         ($($(#[$($macros:tt)+])* $name:ty)+) => {
@@ -34,24 +32,24 @@ macro_rules! impl_trace_nop {
 // Implement empty trace for primitive and integer types
 impl_trace_nop! { () i8 i16 i32 i64 i128 isize u8 u16 u32 u64 u128 usize f32 f64 bool char }
 impl_trace_nop! { NonZeroI8 NonZeroI16 NonZeroI32 NonZeroI64 NonZeroI128 NonZeroIsize
-    NonZeroU8 NonZeroU16 NonZeroU32 NonZeroU64 NonZeroU128 NonZeroUsize }
+NonZeroU8 NonZeroU16 NonZeroU32 NonZeroU64 NonZeroU128 NonZeroUsize }
 impl_trace_nop! {
-        #[cfg(target_has_atomic = "8")] AtomicU8
-        #[cfg(target_has_atomic = "16")] AtomicU16
-        #[cfg(target_has_atomic = "32")] AtomicU32
-        #[cfg(target_has_atomic = "64")] AtomicU64
-        #[cfg(target_has_atomic = "128")] AtomicU128
-        #[cfg(target_has_atomic = "ptr")] AtomicUsize
+    #[cfg(target_has_atomic = "8")] AtomicU8
+    #[cfg(target_has_atomic = "16")] AtomicU16
+    #[cfg(target_has_atomic = "32")] AtomicU32
+    #[cfg(target_has_atomic = "64")] AtomicU64
+    #[cfg(target_has_atomic = "128")] AtomicU128
+    #[cfg(target_has_atomic = "ptr")] AtomicUsize
 
-        #[cfg(target_has_atomic = "8")] AtomicI8
-        #[cfg(target_has_atomic = "16")] AtomicI16
-        #[cfg(target_has_atomic = "32")] AtomicI32
-        #[cfg(target_has_atomic = "64")] AtomicI64
-        #[cfg(target_has_atomic = "128")] AtomicI128
-        #[cfg(target_has_atomic = "ptr")] AtomicIsize
+    #[cfg(target_has_atomic = "8")] AtomicI8
+    #[cfg(target_has_atomic = "16")] AtomicI16
+    #[cfg(target_has_atomic = "32")] AtomicI32
+    #[cfg(target_has_atomic = "64")] AtomicI64
+    #[cfg(target_has_atomic = "128")] AtomicI128
+    #[cfg(target_has_atomic = "ptr")] AtomicIsize
 
-        #[cfg(target_has_atomic = "8")] AtomicBool
-    }
+    #[cfg(target_has_atomic = "8")] AtomicBool
+}
 
 #[cfg(target_has_atomic = "ptr")]
 impl<A: TracingAllocator, P> Trace<A> for AtomicPtr<P> {
@@ -192,6 +190,16 @@ impl<A: TracingAllocator, T: Trace<A>> Trace<A> for Vec<T> {
     #[inline]
     fn trace(&self, tracer: &mut A::Tracer<'_>) {
         Trace::trace_slice(&self[..], tracer)
+    }
+}
+
+#[cfg(feature = "slab")]
+impl<A: TracingAllocator, T: Trace<A>> Trace<A> for slab::Slab<T> {
+    #[inline]
+    fn trace(&self, tracer: &mut A::Tracer<'_>) {
+        for (_, entry) in self {
+            Trace::trace(entry, tracer)
+        }
     }
 }
 

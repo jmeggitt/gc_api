@@ -12,3 +12,4 @@ edition = "2021"
 [dependencies]
 lock_api = { version = "0.4", optional = true }
 smallvec = "1.10.0"
+slab = { version = "0.4.7", optional = true }

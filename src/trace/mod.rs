@@ -1,7 +1,7 @@
 use crate::{Alloc, Gc};
 
-mod trace_impls;
 pub mod roots;
+mod trace_impls;
 
 pub trait TracingAllocator {
     type Tracer<'a>: 'a + Tracer<'a, Self>;
@@ -33,4 +33,3 @@ where
     where
         A: Alloc<T>;
 }
-
